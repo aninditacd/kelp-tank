@@ -1,0 +1,65 @@
+event 173 state.changed pane-upserted
+event 174 state.changed pane-upserted,agent-status-changed
+event 175 state.changed pane-upserted,agent-status-changed
+event 176 state.changed pane-upserted,agent-status-changed
+event 177 state.changed pane-upserted,agent-status-changed
+event 178 state.changed pane-upserted,agent-status-changed
+event 179 state.changed pane-upserted
+event 181 state.changed pane-upserted
+event 182 state.changed pane-upserted
+event 183 state.changed pane-upserted
+event 191 state.changed pane-upserted
+event 192 state.changed pane-upserted,agent-status-changed
+event 193 state.changed pane-upserted
+event 194 state.changed pane-upserted
+event 195 state.changed pane-upserted
+event 196 state.changed pane-upserted,agent-status-changed
+event 197 state.changed pane-upserted
+event 198 state.changed pane-upserted
+event 199 state.changed pane-upserted,agent-status-changed
+event 200 state.changed pane-upserted
+event 201 state.changed pane-upserted
+event 202 state.changed pane-upserted,agent-status-changed
+event 203 state.changed pane-upserted
+event 204 state.changed pane-upserted,agent-status-changed
+event 205 state.changed pane-upserted
+event 206 state.changed pane-upserted
+event 207 state.changed pane-upserted
+event 208 state.changed pane-upserted
+event 209 state.changed pane-upserted
+event 210 state.changed pane-upserted
+event 241 state.changed pane-upserted,agent-status-changed
+event 242 daemon.notification 
+event 243 state.changed pane-upserted
+event 244 state.changed pane-upserted,agent-status-changed
+event 245 daemon.notification 
+event 246 state.changed pane-upserted
+event 247 state.changed pane-upserted,agent-status-changed
+event 248 daemon.notification 
+event 249 state.changed pane-upserted
+event 250 state.changed pane-upserted,agent-status-changed
+event 251 daemon.notification 
+event 252 state.changed pane-upserted
+event 253 state.changed pane-upserted,agent-status-changed
+event 254 daemon.notification 
+event 255 state.changed pane-upserted
+event 265 state.changed pane-upserted,agent-status-changed,layout-changed,focus-changed
+event 266 daemon.reveal-pane 
+event 267 state.changed workspace-upserted,active-workspace-changed
+report {"ready":true,"width":264}
+event 269 state.changed workspace-upserted,active-workspace-changed
+event 270 state.changed focus-changed
+event 271 state.changed focus-changed
+event 272 state.changed pane-upserted,agent-status-changed
+event 284 plugin.contributions.changed 
+report {"ready":true,"width":0}
+event 299 state.changed focus-changed
+report {"focused":"CAA8B67F-1786-4D62-83C7-BFC2A82BA4DF","at":"2026-10-14T06:15:25.518Z"}
+report {"fps":0,"width":220,"devicePixelRatio":2,"visible":"visible"}
+event 310 state.changed pane-upserted,agent-status-changed
+event 312 state.changed focus-changed
+report {"focusedWhileActive":"17B519A4-4420-4980-A6E5-285946603D2F","at":"2026-10-14T06:15:47.568Z"}
+event 313 state.changed pane-upserted,agent-status-changed
+event 318 state.changed pane-upserted
+event 319 state.changed pane-upserted,agent-status-changed
+event 328 state.changed workspace-upserted,pane-removed,layout-changed,focus-changed

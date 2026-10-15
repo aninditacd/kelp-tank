@@ -1,0 +1,174 @@
+<meta charset="utf-8" />
+<title>Kelp Tank</title>
+<style>
+    html,
+    body {
+        height: 100%;
+    }
+    body {
+        margin: 0;
+        overflow: hidden;
+        background: #123f55;
+        font: 13px system-ui;
+    }
+    #tank-box {
+        position: relative;
+        width: 100%;
+        height: 100%;
+        overflow: hidden;
+    }
+    #tank {
+        display: block;
+    }
+    .ws-label {
+        position: absolute;
+        transform: translateY(-2px);
+        font-size: 10.5px;
+        font-weight: 700;
+        color: #f2fbfc;
+        background: rgba(8, 32, 42, 0.62);
+        padding: 1px 7px 1px 5px;
+        border-radius: 999px;
+        display: inline-flex;
+        gap: 5px;
+        align-items: center;
+        pointer-events: none;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+    }
+    .ws-label[hidden] {
+        display: none;
+    }
+    .ws-label i {
+        width: 7px;
+        height: 7px;
+        border-radius: 50%;
+        display: inline-block;
+        flex: none;
+    }
+    .tip {
+        position: absolute;
+        pointer-events: none;
+        background: #ffffff;
+        color: #12303a;
+        border: 1px solid #cfe1e5;
+        border-radius: 8px;
+        padding: 6px 8px;
+        font-size: 12px;
+        box-shadow: 0 6px 18px rgba(0, 0, 0, 0.18);
+        max-width: 180px;
+        z-index: 2;
+    }
+    .tip b {
+        display: block;
+        font-family: ui-monospace, 'SF Mono', Menlo, monospace;
+        font-weight: 500;
+        word-break: break-all;
+    }
+    .zoom-bar {
+        position: absolute;
+        right: 6px;
+        bottom: 6px;
+        display: flex;
+        flex-direction: column;
+        gap: 4px;
+        z-index: 1;
+    }
+    .zoom-bar button,
+    .ws-menu-button {
+        width: 24px;
+        height: 24px;
+        padding: 0;
+        border: 0;
+        border-radius: 50%;
+        background: rgba(8, 32, 42, 0.62);
+        color: #f2fbfc;
+        font: 700 14px/24px system-ui;
+        cursor: pointer;
+    }
+    .zoom-bar button:hover,
+    .ws-menu-button:hover {
+        background: rgba(8, 32, 42, 0.85);
+    }
+    .ws-menu-button {
+        position: absolute;
+        top: 6px;
+        right: 6px;
+        z-index: 3;
+    }
+    .ws-menu-dot {
+        position: absolute;
+        top: -1px;
+        right: -1px;
+        width: 8px;
+        height: 8px;
+        border-radius: 50%;
+        background: #ffd34d;
+        box-shadow: 0 0 6px 2px rgba(255, 211, 77, 0.8);
+        animation: ws-menu-glow 1.6s ease-in-out infinite;
+    }
+    .ws-menu-dot[hidden] {
+        display: none;
+    }
+    @keyframes ws-menu-glow {
+        50% {
+            box-shadow: 0 0 2px 1px rgba(255, 211, 77, 0.4);
+        }
+    }
+    .ws-menu {
+        position: absolute;
+        top: 34px;
+        right: 6px;
+        max-width: calc(100% - 12px);
+        max-height: calc(100% - 46px);
+        overflow-y: auto;
+        background: #ffffff;
+        color: #12303a;
+        border: 1px solid #cfe1e5;
+        border-radius: 8px;
+        padding: 4px;
+        box-shadow: 0 6px 18px rgba(0, 0, 0, 0.18);
+        z-index: 3;
+    }
+    .ws-menu-row {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        padding: 3px 6px;
+        border-radius: 5px;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        cursor: pointer;
+    }
+    .ws-menu-row:hover {
+        background: #eef6f8;
+    }
+    .ws-menu-row i {
+        width: 8px;
+        height: 8px;
+        border-radius: 50%;
+        flex: none;
+    }
+    .ws-menu p {
+        margin: 4px 6px;
+    }
+    #error {
+        position: absolute;
+        top: 8px;
+        left: 8px;
+        right: 8px;
+        margin: 0;
+        color: #ffb3b3;
+        white-space: pre-wrap;
+    }
+    #error:empty {
+        display: none;
+    }
+</style>
+<div id="tank-box">
+    <canvas id="tank"></canvas>
+    <p id="error" role="alert"></p>
+</div>
+<script src="app.js"></script>

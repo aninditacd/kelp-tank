@@ -1,0 +1,22 @@
+{
+  "id": "dita.kelp-tank-probe",
+  "name": "Kelp Tank Probe",
+  "version": "0.1.0",
+  "apiVersion": 1,
+  "trust": "full",
+  "activation": "startup",
+  "backend": "backend.mjs",
+  "contributes": {
+    "views": [
+      {
+        "id": "dita.kelp-tank-probe.view",
+        "title": "Kelp Tank Probe",
+        "entry": "ui/index.html",
+        "placements": ["pane", "sidebar.primary", "sidebar.secondary"],
+        "stateVersion": 1
+      }
+    ],
+    "commands": [{ "id": "dita.kelp-tank-probe.report", "title": "Kelp Tank Probe: report" }],
+    "settings": {}
+  }
+}

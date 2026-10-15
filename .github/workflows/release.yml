@@ -1,0 +1,43 @@
+name: Release
+
+# A version tag (v1.0.0 and so on) runs every check, builds kelp-tank.kelpi-plugin and attaches it to a GitHub
+# release for that tag, so a friend can download it and install it in Kelpi.
+on:
+  push:
+    tags: ['v*']
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    env:
+      KELPI_COMMIT: 897b5b8
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+
+      # Kelpi's CLI is not on npm. Build it from Kelpi's public repo, at the commit CI checks
+      # against, so `pnpm package` can pack the plugin.
+      - name: Build the Kelpi CLI
+        run: |
+          git clone --filter=blob:none https://github.com/benfriebe/kelpi "$RUNNER_TEMP/kelpi"
+          git -C "$RUNNER_TEMP/kelpi" checkout "$KELPI_COMMIT"
+          cd "$RUNNER_TEMP/kelpi"
+          pnpm install --frozen-lockfile --ignore-scripts --filter @kelpi/cli...
+          pnpm --filter @kelpi/cli build
+          echo "KELPI_CLI=$RUNNER_TEMP/kelpi/packages/cli/dist/kelpi.js" >> "$GITHUB_ENV"
+
+      - run: pnpm check
+      - run: pnpm package
+
+      - name: Attach the package to a release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release create "$GITHUB_REF_NAME" kelp-tank.kelpi-plugin --generate-notes

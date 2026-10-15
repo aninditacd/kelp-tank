@@ -1,0 +1,8 @@
+{
+  "*.{ts,mjs,js}": [
+    "prettier --write",
+    "eslint --max-warnings=0",
+    "vitest related --run --passWithNoTests"
+  ],
+  "*.{json,md,html,yml}": ["prettier --write"]
+}

@@ -1,0 +1,38 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    env:
+      KELPI_COMMIT: 897b5b8
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+
+      # Kelpi's CLI is not on npm. Build it from Kelpi's public repo, at the commit this plugin
+      # was written against, so `pnpm validate` can check the package.
+      - name: Build the Kelpi CLI
+        run: |
+          git clone --filter=blob:none https://github.com/benfriebe/kelpi "$RUNNER_TEMP/kelpi"
+          git -C "$RUNNER_TEMP/kelpi" checkout "$KELPI_COMMIT"
+          cd "$RUNNER_TEMP/kelpi"
+          pnpm install --frozen-lockfile --ignore-scripts --filter @kelpi/cli...
+          pnpm --filter @kelpi/cli build
+          echo "KELPI_CLI=$RUNNER_TEMP/kelpi/packages/cli/dist/kelpi.js" >> "$GITHUB_ENV"
+
+      - run: pnpm format:check
+      - run: pnpm lint
+      - run: pnpm typecheck
+      - run: pnpm test
+      - run: pnpm build
+      - run: pnpm validate
