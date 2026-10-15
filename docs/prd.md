@@ -27,7 +27,7 @@ It is a hobby build, with no deadline and no Linear tickets.
 | --- | --- | --- |
 | Daily session | A day name such as `wed-14-10-2026` | Turtle |
 | Conductor | A name containing `conduct` | Round pufferfish with a tiny crown |
-| A conductor's rail | A name ending in `rail-a`, `rail-b` and so on, with or without a batch prefix such as `lh-deps-1013-` | Very small fish that follow their conductor |
+| A conductor's rail | A name ending in `rail-a`, `rail-b` and so on, with or without a batch prefix such as `lh-deps-1013-`. A handover number such as `rail-r2` still counts | Very small fish that follow their conductor |
 | Anything else | Any other name | Chubby round fish |
 
 All creatures are cute, with big eyes and pink cheeks. A busy ledge is shared, not capped.
