@@ -4,7 +4,7 @@ import { clampView, fitView, type Frame, type View } from './view';
 /**
  * What the tank remembers across pages. Kelpi rebuilds a sidebar view's page on every workspace
  * switch and gives a sidebar no view state, so the tank keeps its creatures' positions and its
- * zoom and scroll in plugin storage instead (issue #15).
+ * zoom and scroll in plugin storage instead.
  */
 
 /** The plugin storage key: `{ fish: { [paneId]: [x, y, z] }, view: [zoom, x, y] }`. */

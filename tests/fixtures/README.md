@@ -1,6 +1,6 @@
 # Recorded run from Kelpi's private instance
 
-Captured once on 14 Oct 2026 by Rail A (issue #2), from Kelpi's private test instance at Kelpi commit `897b5b8`. It is real data. Never hand-edit it; capture a new run instead. The one exception: on 15 Oct 2026 (issue #18) every recording here had its home-folder paths and three private workspace names renamed for the public repo, by exact string replacement and nothing else. Paths under the home folder now start `/srv/demo`, and the renamed workspaces are Harbour, Lighthouse and Lagoon, with their sessions and pane labels to match.
+Captured once on 14 Oct 2026 by Rail A, from Kelpi's private test instance at Kelpi commit `897b5b8`. It is real data. Never hand-edit it; capture a new run instead. The one exception: on 15 Oct 2026, when the repo went public, every recording here had its home-folder paths and three private workspace names renamed for the public repo, by exact string replacement and nothing else. Paths under the home folder now start `/srv/demo`, and the renamed workspaces are Harbour, Lighthouse and Lagoon, with their sessions and pane labels to match.
 
 ## Files
 
@@ -31,7 +31,7 @@ The snapshot on line 1 was taken before any Claude session started, so it holds 
 
 # Sidebar order run
 
-`sidebar-order-run.jsonl` was captured on 14 Oct 2026 by Rail B (issue #3), from Kelpi's private instance at Kelpi commit `897b5b8`, with `kelpi plugin watch`. It is real data, kept the same way as the run above: line 1 is the snapshot envelope, and only `state.changed` lines are kept. The stream also carried 3 `daemon.system-stats` lines and 1 `daemon.reveal-pane` line, which were left out whole.
+`sidebar-order-run.jsonl` was captured on 14 Oct 2026 by Rail B, from Kelpi's private instance at Kelpi commit `897b5b8`, with `kelpi plugin watch`. It is real data, kept the same way as the run above: line 1 is the snapshot envelope, and only `state.changed` lines are kept. The stream also carried 3 `daemon.system-stats` lines and 1 `daemon.reveal-pane` line, which were left out whole.
 
 It shows that the snapshot's `workspaces` array is not the sidebar order. The array is creation order: Default, Alpha, Bravo, Charlie, Delta. The sidebar follows `topLevelOrder`, with each group expanded in its own `childOrder`.
 
@@ -47,7 +47,7 @@ The snapshot row and the last row match the window's sidebar text, read through 
 
 # Collapsed group run
 
-`collapsed-group-run.jsonl` was captured on 14 Oct 2026 by Rail B (issue #11), from the same private instance as the sidebar order run, with `kelpi plugin watch`. Line 1 is the snapshot (sequence 818); line 2 is the only `state.changed` event that followed. Two `daemon.system-stats` lines were left out whole.
+`collapsed-group-run.jsonl` was captured on 14 Oct 2026 by Rail B, from the same private instance as the sidebar order run, with `kelpi plugin watch`. Line 1 is the snapshot (sequence 818); line 2 is the only `state.changed` event that followed. Two `daemon.system-stats` lines were left out whole.
 
 - **Snapshot:** the sidebar is Alpha, Charlie, Default, then group Ops (expanded) holding Bravo, Echo and Delta.
 - **Sequence 820:** a click on the Ops group header in the window collapsed it. Kelpi sent one `group-upserted` change with `isCollapsed: true`.
@@ -55,7 +55,7 @@ The snapshot row and the last row match the window's sidebar text, read through 
 
 # Twelve sessions run
 
-`twelve-sessions-run.jsonl` was captured on 14 Oct 2026 by Rail D (issue #7), from Kelpi's private instance at Kelpi commit `897b5b8`, with `kelpi plugin watch`. Line 1 is the snapshot (sequence 397). Only `state.changed`, `daemon.notification` and `daemon.attention-request` lines are kept, as in the first run. The stream also carried 471 `daemon.system-stats`, 8 `daemon.reveal-pane`, 4 `daemon.graft-orphans` and 3 `plugin.contributions.changed` lines, which were left out whole. No kept line was altered.
+`twelve-sessions-run.jsonl` was captured on 14 Oct 2026 by Rail D, from Kelpi's private instance at Kelpi commit `897b5b8`, with `kelpi plugin watch`. Line 1 is the snapshot (sequence 397). Only `state.changed`, `daemon.notification` and `daemon.attention-request` lines are kept, as in the first run. The stream also carried 471 `daemon.system-stats`, 8 `daemon.reveal-pane`, 4 `daemon.graft-orphans` and 3 `plugin.contributions.changed` lines, which were left out whole. No kept line was altered.
 
 Every session is a real `claude -n <name>` in a pane of the instance. Claude there was not logged in, so a prompt never finished a turn. The working and waiting states were therefore driven with Claude's own hook command, `kelpi event start` and `kelpi event stop --agent claude`, run as that pane (its `KELPI_PANE_ID`, against the instance's socket). The instance's daemon produced every event from those calls, exactly as it does when Claude's hooks fire.
 

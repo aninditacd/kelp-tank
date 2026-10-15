@@ -4,7 +4,7 @@ import type { SessionRole, SessionState, TankSession, TankState } from './tank-s
 
 /**
  * Decides what the tank shows from Kelpi's workspaces and panes. Pure logic: it never touches
- * the scene. The rules are in docs/prd.md and issue #3.
+ * the scene. The rules are in docs/prd.md.
  */
 
 const STATUS_PREFIX = /^[^\p{L}\p{N}]\s+/u;

@@ -4,7 +4,7 @@ import { describe, expect, it } from 'vitest';
 
 /**
  * The repo is public, so no tracked file may hold a home-folder path or an email address
- * (issue #18). The patterns are generic on purpose: this file names nothing private.
+ * (added when the repo went public). The patterns are generic on purpose: this file names nothing private.
  * Co-author lines use no-reply addresses, which are allowed.
  */
 const BINARY = /\.(png|jpe?g|gif|ico|woff2?)$/i;

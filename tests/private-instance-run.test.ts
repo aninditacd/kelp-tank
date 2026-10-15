@@ -2,7 +2,7 @@ import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 
 /**
- * Tests against the recorded run from Kelpi's private instance (issue #2). The fixture is real
+ * Tests against the recorded run from Kelpi's private instance. The fixture is real
  * captured data; `tests/fixtures/README.md` says how it was made. Never hand-edit it.
  */
 

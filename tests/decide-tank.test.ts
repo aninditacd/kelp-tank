@@ -60,7 +60,7 @@ describe('roles from session names', () => {
     });
 
     it('a batch-prefixed rail is a rail', () => {
-        // Batch-prefixed rail names in the shape issue #16 reported, Kelp Tank's own, and a slug containing "conduct".
+        // Batch-prefixed rail names in the shape a live batch produced, Kelp Tank's own, and a slug containing "conduct".
         // Compared as one object, so every misread name shows in the diff, not just the first.
         const names = [
             'lh-deps-1013-rail-a',

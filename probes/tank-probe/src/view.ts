@@ -1,6 +1,6 @@
 // No tests by design: this probe is one-off evidence tooling (see probes/tank-probe/README.md).
 /**
- * Probe view, for issue #2's open questions only. It is never shipped.
+ * Probe view, for the version-one open questions only (docs/prd.md, "Answered questions"). It is never shipped.
  * - Frame rate: animates 12 moving shapes and reports frames per second over 2-second windows, with the view's width.
  * - Focus: when the pane labelled `focus-target` is waiting, it focuses that pane once through
  *   `ui.focusPane`, as a click on a fish would.

@@ -4,9 +4,9 @@ import type { WorkspaceColor } from './kelpi-api';
  * What the tank shows: one entry per workspace that can hold a ledge, and one per Claude or
  * Codex session that is a creature.
  *
- * Issue #3's decider produces it from Kelpi's panes and workspaces. Issue #5 draws the ledges
- * from `workspaces`, and issue #6 draws a creature for each of `sessions`. Plain terminal panes
- * never appear here.
+ * `decide-tank.ts` produces it from Kelpi's panes and workspaces. The scene (`src/ui/tank.ts`)
+ * draws a ledge for each of `workspaces` and a creature for each of `sessions`. Plain terminal
+ * panes never appear here.
  */
 export interface TankState {
     workspaces: TankWorkspace[];
