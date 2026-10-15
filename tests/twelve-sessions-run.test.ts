@@ -7,7 +7,7 @@ import type { SessionRole, SessionState, TankState } from '../src/tank-state';
 import { buildToTemp } from './package/build-to-temp';
 
 /**
- * Issue #7's run in Kelpi's private instance: twelve real Claude sessions across nine
+ * The twelve-session run in Kelpi's private instance: twelve real Claude sessions across nine
  * workspaces, replayed through the real live tank. `tests/fixtures/README.md` says how it was
  * captured. The expected values below are the run table written while running it, not values
  * read back from the code.
@@ -75,7 +75,7 @@ async function replay(): Promise<TankState[]> {
     return states;
 }
 
-describe("issue #7's run with twelve real sessions", () => {
+describe('the twelve-session run with real sessions', () => {
     let states: TankState[];
     beforeAll(async () => {
         states = await replay();
@@ -108,7 +108,7 @@ describe('the built view', () => {
         const app = readFileSync(path.join(buildToTemp(), 'ui', 'app.js'), 'utf8');
         // Positive control: this is the real bundle, which stores the hidden workspaces.
         expect(app).toContain('hiddenWorkspaces');
-        // Session names and a pane id from the demo data that main had before issue #4.
+        // Session names and a pane id from the demo data that main had before the live feed replaced it.
         for (const demo of ['p-conductor', 'p-rail-c', 'p-review'])
             expect(app, demo).not.toContain(demo);
     });

@@ -5,7 +5,7 @@ Kelp Tank is a plugin for [Kelpi](https://github.com/benfriebe/kelpi), the termi
 ![Kelp Tank in Kelpi's sidebar](docs/screenshots/kelp-tank.png)
 
 - Each Kelpi workspace gets a rock ledge with its name, its shortcut and kelp in its colour.
-- A session is a round fish. A session named after a day, such as `wed-15-10-2026`, is a turtle. A name containing `conduct` is a pufferfish with a crown, and a name ending in `rail-a`, `rail-b` and so on is a tiny fish that follows its conductor.
+- A session is a round fish. A session named after a day, such as `wed-15-10-2026`, is a turtle. A name containing `conduct` is a pufferfish with a crown, and a name ending in `rail-a`, `rail-b` and so on, or a handover such as `rail-r2`, is a tiny fish that follows its conductor.
 - A working session swims around its ledge, and an idle one drifts slowly near it. A session waiting for you swims to the glass, glows and shows a "!" bubble. A waiting rail nudges its conductor instead, and a muted workspace never glows.
 - Click a creature to jump to its session. Pinch, ⌘-scroll or the + and − buttons zoom; plain scrolling moves around a tall tank. The menu hides workspaces.
 

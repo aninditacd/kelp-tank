@@ -5,7 +5,7 @@ import { applyChanges, worldFromSnapshot, type KelpiWorld } from '../../src/kelp
 import type { TankState } from '../../src/tank-state';
 
 /**
- * The recorded run from Kelpi's private instance (issue #2), loaded for tests.
+ * The recorded run from Kelpi's private instance, loaded for tests.
  * `tests/fixtures/README.md` says how it was captured. Never hand-edit the fixture.
  */
 

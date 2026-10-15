@@ -1,7 +1,7 @@
 # Kelp Tank
 
 Kelp Tank is a hobby plugin for Kelpi, Dita's terminal app. Each Claude session shows as a fish in a 3D kelp aquarium.
-It is a hobby project with no Linear tickets. The view draws the tank (water, glass, sand, rock ledges, kelp and the creatures) from Kelpi's live sessions, and a click jumps to a session. Issue #7 checks it end to end and installs it in Dita's live Kelpi.
+It is a hobby project with no Linear tickets. The view draws the tank (water, glass, sand, rock ledges, kelp and the creatures) from Kelpi's live sessions, and a click jumps to a session. An end-to-end check in the private instance, then an install in Dita's live Kelpi, finish version one.
 
 ## Stack
 
@@ -13,7 +13,7 @@ TypeScript stays on 6.0 because `typescript-eslint` 8.71 does not support TypeSc
 - `kelpi.plugin.json` - manifest. Id `dita.kelp-tank`, one view `dita.kelp-tank.home` (placements: pane, sidebar.primary, sidebar.secondary), one command `dita.kelp-tank.summary`.
 - `src/backend.ts` - exports `activate(api)`; registers the summary command, which returns `api.workspaces.list()`.
 - `src/ui/index.html`, `src/ui/app.ts` - the view. `app.ts` creates the tank, feeds it from `startLiveTank`, and passes each click to `jump`.
-- `src/ui/tank.ts` - `createTank(canvas, { onSelect(paneId) })` returns `{ setState(state), recall(memory), snapshot(), dispose() }`. `recall` hands it what an earlier page remembered, before the first state, so creatures and the zoom and scroll come back; `snapshot` is what to remember now. It draws the scene, re-lays it on resize, moves the creatures, and calls `onSelect` once per click on a creature with its pane id (never for empty water). That signature is the click hand-off to issue #4; keep it stable.
+- `src/ui/tank.ts` - `createTank(canvas, { onSelect(paneId) })` returns `{ setState(state), recall(memory), snapshot(), dispose() }`. `recall` hands it what an earlier page remembered, before the first state, so creatures and the zoom and scroll come back; `snapshot` is what to remember now. It draws the scene, re-lays it on resize, moves the creatures, and calls `onSelect` once per click on a creature with its pane id (never for empty water). That signature is the click hand-off to `app.ts`'s `jump`; keep it stable.
 - `src/ui/behaviour.ts` - pure: `decideGoals(state)` and the points creatures head for. `src/ui/tooltip.ts` - hover text. `src/ui/pick.ts` - the pane id under the pointer. All unit-tested in `tests/ui/`.
 - `src/ui/creatures.ts`, `src/ui/effects.ts`, `src/ui/toon.ts` - the creature meshes, the "!" bubble, glow and ripple, and shared toon materials, ported from the approved preview. Not unit-tested: WebGL.
 - `src/ui/layout.ts` - `layoutTank(widthPx, heightPx, count)`, the pure ledge layout in world units (140 px a unit). Ledges fit the view down to `MIN_LEDGE_SPACING`, then the tank grows taller than the view. `src/ui/colors.ts` - Kelpi's workspace colours and the kelp tint. Both are unit-tested in `tests/ui/`.
@@ -57,7 +57,7 @@ The repo is public. Keep home-folder paths, email addresses and Dita's private p
 
 ## Kelpi session events (answered 14 Oct 2026)
 
-A plugin backend does hear Kelpi's session events, pushed through `api.events.on`. Rail A proved it in the private instance (issue #2).
+A plugin backend does hear Kelpi's session events, pushed through `api.events.on`. Rail A proved it in the private instance, in the first recorded run.
 
 - The real run is `tests/fixtures/private-instance-run.jsonl`; `tests/fixtures/README.md` explains it. Test new logic against it.
 - `docs/prd.md`, "Answered questions", records where the session name lives (the pane `title`, after a status prefix), focus from a plugin, and the frame rate.

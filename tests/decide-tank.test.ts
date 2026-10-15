@@ -60,7 +60,7 @@ describe('roles from session names', () => {
     });
 
     it('a batch-prefixed rail is a rail', () => {
-        // Batch-prefixed rail names in the shape issue #16 reported, Kelp Tank's own, and a slug containing "conduct".
+        // Batch-prefixed rail names in the shape a live batch produced, Kelp Tank's own, and a slug containing "conduct".
         // Compared as one object, so every misread name shows in the diff, not just the first.
         const names = [
             'lh-deps-1013-rail-a',
@@ -73,6 +73,29 @@ describe('roles from session names', () => {
         ];
         expect(Object.fromEntries(names.map((n) => [n, roleForName(n)]))).toEqual(
             Object.fromEntries(names.map((n) => [n, 'rail'])),
+        );
+    });
+
+    it('a handover rail with a trailing number is a rail', () => {
+        // A conductor hands a rail that ran out of context to a fresh session named rail-<x>2, 3 and so on.
+        const names = ['rail-r2', 'rail-a3', 'lh-deps-1013-rail-r2', 'lh-deps-1013-rail-b12'];
+        expect(Object.fromEntries(names.map((n) => [n, roleForName(n)]))).toEqual(
+            Object.fromEntries(names.map((n) => [n, 'rail'])),
+        );
+    });
+
+    it('a trailing number does not make a non-rail a rail', () => {
+        const names = [
+            'guardrail-a2',
+            'guardrail-r2',
+            'rail-ab',
+            'rail-ab2',
+            'rail-2',
+            'rail-r2-notes',
+            'trail-b2',
+        ];
+        expect(Object.fromEntries(names.map((n) => [n, roleForName(n)]))).toEqual(
+            Object.fromEntries(names.map((n) => [n, 'fish'])),
         );
     });
 
@@ -226,6 +249,21 @@ describe('the decider on hand-built worlds', () => {
             handBuilt([
                 livePane('c', 'A', 'conducting-lighthouse', { status: 'running' }),
                 livePane('r', 'A', 'lh-deps-1013-rail-a'),
+            ]),
+            null,
+        );
+        expect(tank.sessions.find((s) => s.paneId === 'r')).toMatchObject({
+            role: 'rail',
+            state: 'wantsYou',
+            relaysTo: 'c',
+        });
+    });
+
+    it('a waiting handover rail relays to its conductor', () => {
+        const tank = decideTank(
+            handBuilt([
+                livePane('c', 'A', 'conducting-harbour', { status: 'running' }),
+                livePane('r', 'A', 'lh-deps-1013-rail-r2'),
             ]),
             null,
         );
