@@ -559,6 +559,8 @@ export function createTank(canvas: HTMLCanvasElement, options: TankOptions): Tan
             if (box) {
                 c.box = box;
                 c.workspaceId = s.workspaceId;
+                // A ledge appearing or leaving moves this one, so a sleeper finds its new floor.
+                c.rest = null;
             }
             c.session = s;
             if (c.leaving && goal.kind !== 'leave') c.leaving = false;
@@ -665,6 +667,8 @@ export function createTank(canvas: HTMLCanvasElement, options: TankOptions): Tan
         for (const c of swimmers.values()) {
             const box = boxFor(c.workspaceId);
             if (box) c.box = box;
+            // Ledges move on a re-layout, so a sleeper finds its new floor.
+            c.rest = null;
             if (c.leaving) continue;
             const limit = layout.width / 2 - 0.05;
             c.pos.x = Math.max(-limit, Math.min(limit, c.pos.x));
