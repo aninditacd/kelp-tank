@@ -351,7 +351,8 @@ export interface MoodFx {
 
 export function makeMoodFx(): MoodFx {
     const group = new Group();
-    const drop = sprite(dropTexture(), 0.3);
+    // Larger than the preview's, which drew creatures bigger: at tank scale 0.3 was a speck.
+    const drop = sprite(dropTexture(), 0.55);
     group.add(drop);
     const zs = [0, 1, 2].map((i) => {
         const s = sprite(zTexture(), 0.4);
@@ -366,7 +367,7 @@ export function makeMoodFx(): MoodFx {
             drop.visible = tired > 0.01;
             if (drop.visible) {
                 const k = (t * 0.6) % 1;
-                drop.position.set(0.5, anchor.top + 0.15 - k * 0.5, 0.6);
+                drop.position.set(0.55, anchor.top + 0.2 - k * 0.5, 0.7);
                 drop.material.opacity = tired * (1 - k * k);
             }
             for (const z of zs) {
