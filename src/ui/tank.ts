@@ -51,6 +51,7 @@ import { type Creature, makeBaby, makeCreature, NOSE, setLids } from './creature
 import { type AlertFx, makeAlertFx, makeRipple, makeTickFx, type TickFx } from './effects';
 import { DEPTH, layoutTank, PX_PER_UNIT, type TankLayout } from './layout';
 import { entranceFor, openingView, type TankMemory, type TankSnapshot } from './memory';
+import { paceFrame } from './pacing';
 import { pickPaneId } from './pick';
 import { blob, toon } from './toon';
 import { tooltipText } from './tooltip';
@@ -954,7 +955,16 @@ export function createTank(canvas: HTMLCanvasElement, options: TankOptions): Tan
     canvas.addEventListener('click', onClick);
 
     const clock = { last: performance.now() };
+    let lastDraw: number | null = null;
     function tick(now: number) {
+        // Every display frame still calls back, but the tank moves and draws at most
+        // FRAME_RATE_CAP times a second (`pacing.ts`).
+        const pace = paceFrame(now, lastDraw);
+        lastDraw = pace.lastDraw;
+        if (!pace.draw) {
+            frame = requestAnimationFrame(tick);
+            return;
+        }
         const dt = Math.min((now - clock.last) / 1000, 0.05);
         clock.last = now;
         const t = now / 1000;
@@ -968,7 +978,8 @@ export function createTank(canvas: HTMLCanvasElement, options: TankOptions): Tan
         for (const r of rays) r.mesh.rotation.z = r.base + Math.sin(t * 0.3 + r.seed) * 0.05;
         for (const b of bubbles) {
             b.mesh.position.y += b.speed * dt;
-            b.mesh.position.x += Math.sin(t * 2 + b.seed) * 0.002;
+            // 0.12 a second is the 0.002 a frame this wobble was tuned at, 60 frames a second.
+            b.mesh.position.x += Math.sin(t * 2 + b.seed) * 0.12 * dt;
             if (b.mesh.position.y > layout.height - 0.05) {
                 b.mesh.position.y = 0.05;
                 b.mesh.position.x = rnd(b.x0, b.x1);
