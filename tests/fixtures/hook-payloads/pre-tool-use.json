@@ -1,0 +1,19 @@
+{
+    "session_id": "55e220b3-2d91-4c4e-99a9-70172f689bf8",
+    "transcript_path": "/srv/demo/.claude/projects/-srv-demo-harbour/55e220b3-2d91-4c4e-99a9-70172f689bf8.jsonl",
+    "cwd": "/srv/demo/harbour",
+    "prompt_id": "389ced17-bf07-4a0b-8915-0ec2e2e7cf1c",
+    "permission_mode": "default",
+    "agent_id": "a3e513c8e104dab10",
+    "agent_type": "general-purpose",
+    "effort": {
+        "level": "medium"
+    },
+    "hook_event_name": "PreToolUse",
+    "tool_name": "Bash",
+    "tool_input": {
+        "command": "ls /srv/demo/harbour/tide-charts",
+        "description": "List the mooring tide charts"
+    },
+    "tool_use_id": "toolu_014sdGrBKF6Wo2LLWzkh2SnH"
+}

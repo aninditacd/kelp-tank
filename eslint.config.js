@@ -7,7 +7,7 @@ export default tseslint.config(
     js.configs.recommended,
     ...tseslint.configs.recommended,
     {
-        files: ['scripts/**/*.mjs', 'eslint.config.js'],
+        files: ['scripts/**/*.mjs', 'claude-hook/**/*.mjs', 'eslint.config.js'],
         languageOptions: { globals: { process: 'readonly', console: 'readonly' } },
     },
     prettier,

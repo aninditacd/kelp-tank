@@ -27,10 +27,43 @@ export interface WorkspaceInfo {
     groupName?: string;
 }
 
+/** Who ran a command. `paneID` and `workspaceID` come from the caller's `KELPI_PANE_ID` for a CLI verb. */
+export interface CommandContext {
+    daemonID: string;
+    workspaceID?: string;
+    paneID?: string;
+}
+
+/** The args a command gets when it runs as a `kelpi <verb>` from the manifest's `contributes.cli`. */
+export interface CliInvocation {
+    argv: string[];
+    cwd: string;
+    isTTY: boolean;
+    json: boolean;
+}
+
+/** What a `contributes.cli` command returns. The CLI prints `stderr` to standard error, then `text`. */
+export interface CliResult {
+    text?: string;
+    json?: unknown;
+    exitCode?: number;
+    stderr?: string;
+}
+
 /** The `api` object Kelpi passes to a backend's `activate`. */
 export interface BackendApi {
     commands: {
-        register(id: string, handler: (args?: unknown) => unknown): () => void;
+        register(
+            id: string,
+            handler: (args: unknown, context: CommandContext) => unknown,
+        ): () => void;
+    };
+    /** Sends a plugin event to every view and backend, named `<plugin id>.<name>`. */
+    emit(name: string, data?: unknown): Promise<PluginEvent>;
+    /** Persistent JSON belonging to this plugin on this daemon. */
+    storage: {
+        get(key: string): Promise<unknown>;
+        set(key: string, value: unknown): Promise<void>;
     };
     workspaces: {
         list(options?: { groupID?: string }): Promise<WorkspaceInfo[]>;
