@@ -10,8 +10,8 @@ TypeScript stays on 6.0 because `typescript-eslint` 8.71 does not support TypeSc
 
 ## Layout
 
-- `kelpi.plugin.json` - manifest. Id `dita.kelp-tank`, one view `dita.kelp-tank.home` (placements: pane, sidebar.primary, sidebar.secondary), one command `dita.kelp-tank.summary`.
-- `src/backend.ts` - exports `activate(api)`; registers the summary command, which returns `api.workspaces.list()`.
+- `kelpi.plugin.json` - manifest. Id `dita.kelp-tank`, one view `dita.kelp-tank.home` (placements: pane, sidebar.primary, sidebar.secondary), two commands, `dita.kelp-tank.summary` and `dita.kelp-tank.quiet`.
+- `src/backend.ts` - exports `activate(api)`; registers the summary command, which returns `api.workspaces.list()`, and the quiet command; it also listens to `api.agents.onEvent` to keep the quiet panes (see `src/quiet.ts`).
 - `src/ui/index.html`, `src/ui/app.ts` - the view. `app.ts` creates the tank, feeds it from `startLiveTank`, and passes each click to `jump`.
 - `src/ui/tank.ts` - `createTank(canvas, { onSelect(paneId) })` returns `{ setState(state), recall(memory), snapshot(), dispose() }`. `recall` hands it what an earlier page remembered, before the first state, so creatures and the zoom and scroll come back; `snapshot` is what to remember now. It draws the scene, re-lays it on resize, moves the creatures, and calls `onSelect` once per click on a creature with its pane id (never for empty water). That signature is the click hand-off to `app.ts`'s `jump`; keep it stable.
 - `src/ui/behaviour.ts` - pure: `decideGoals(state)` and the points creatures head for. `src/ui/tooltip.ts` - hover text. `src/ui/pick.ts` - the pane id under the pointer. All unit-tested in `tests/ui/`.

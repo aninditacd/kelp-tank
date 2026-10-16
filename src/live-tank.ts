@@ -9,6 +9,8 @@ export type LiveKelpi = Pick<ViewApi, 'snapshot' | 'events' | 'ui' | 'commands'>
 
 /** The backend command that lists the panes whose last reply ended `Awaiting you: 0`. */
 const QUIET_COMMAND = 'dita.kelp-tank.quiet';
+/** How long a snapshot waits for the backend's answer before showing every waiting fish as wanting the owner. */
+const QUIET_WAIT_MS = 3000;
 
 /**
  * Keeps a `TankState` current from Kelpi's pushed events, without polling, and jumps to a
@@ -57,14 +59,31 @@ export function startLiveTank(
         pending = buffered;
         // Events stay buffered until the backend has answered too, so a live event always lands on
         // top of the answer and never under it.
-        const quietPanes = (): Promise<string[]> =>
-            kelpi.commands.execute<{ panes?: unknown }>(QUIET_COMMAND).then(
-                (answer) =>
-                    Array.isArray(answer?.panes)
-                        ? answer.panes.filter((id): id is string => typeof id === 'string')
-                        : [],
-                () => [],
+        // The wait is bounded and a throw is caught: the tank is the plugin's one job, so a backend
+        // that is slow to start, silent or missing must cost the quiet marks and nothing else.
+        const quietPanes = (): Promise<string[]> => {
+            const answered = new Promise<string[]>((resolve) => {
+                try {
+                    kelpi.commands.execute<{ panes?: unknown }>(QUIET_COMMAND).then(
+                        (answer) =>
+                            resolve(
+                                Array.isArray(answer?.panes)
+                                    ? answer.panes.filter(
+                                          (id): id is string => typeof id === 'string',
+                                      )
+                                    : [],
+                            ),
+                        () => resolve([]),
+                    );
+                } catch {
+                    resolve([]);
+                }
+            });
+            const waited = new Promise<string[]>((resolve) =>
+                setTimeout(() => resolve([]), QUIET_WAIT_MS),
             );
+            return Promise.race([answered, waited]);
+        };
         kelpi
             .snapshot()
             .then(async (snapshot: Snapshot) => ({ snapshot, panes: await quietPanes() }))

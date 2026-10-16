@@ -367,6 +367,24 @@ describe('the live tank', () => {
             expect(fake.errors).toEqual([]);
         });
 
+        it('a seed that never answers still draws the tank after the wait', async () => {
+            vi.useFakeTimers({ toFake: ['setTimeout'] });
+            const fake = fakeKelpi({ holdSeed: true });
+            await fake.resolveSnapshot(footerSnapshotAt(137));
+            expect(fake.states).toHaveLength(0);
+            await vi.advanceTimersByTimeAsync(3000);
+            expect(stateOf(fake, 'update-fish')).toBe('wantsYou');
+            expect(fake.errors).toEqual([]);
+        });
+
+        it('a Kelpi without commands still draws the tank', async () => {
+            const fake = fakeKelpi();
+            (fake.kelpi as { commands?: unknown }).commands = undefined;
+            await fake.resolveSnapshot(footerSnapshotAt(137));
+            expect(stateOf(fake, 'update-fish')).toBe('wantsYou');
+            expect(fake.errors).toEqual([]);
+        });
+
         it('the live tank never writes to storage', () => {
             const source = readFileSync('src/live-tank.ts', 'utf8');
             expect(source).not.toMatch(/storage/);
