@@ -9,7 +9,7 @@ jobs:
   check:
     runs-on: ubuntu-latest
     env:
-      KELPI_COMMIT: 897b5b8
+      KELPI_COMMIT: v0.2.19
     steps:
       - uses: actions/checkout@v4
       - uses: pnpm/action-setup@v4
@@ -19,7 +19,7 @@ jobs:
           cache: pnpm
       - run: pnpm install --frozen-lockfile
 
-      # Kelpi's CLI is not on npm. Build it from Kelpi's public repo, at the commit this plugin
+      # Kelpi's CLI is not on npm. Build it from Kelpi's public repo, at the tag this plugin
       # was written against, so `pnpm validate` can check the package.
       - name: Build the Kelpi CLI
         run: |

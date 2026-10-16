@@ -11,6 +11,8 @@ Kelp Tank is a plugin for [Kelpi](https://github.com/benfriebe/kelpi), the termi
 
 ## Install
 
+Needs Kelpi 0.2.19 or later.
+
 1. Download `kelp-tank.kelpi-plugin` from this repo's [Releases](../../releases) page.
 2. Install it in Kelpi, either way:
    - Open **Settings → Plugins** and install the file.
@@ -35,7 +37,7 @@ Pushing a version tag such as `v1.0.0` runs `.github/workflows/release.yml`, whi
 
 ## Credits
 
-Kelp Tank is built on [Kelpi](https://github.com/benfriebe/kelpi) (github.com/benfriebe/kelpi). Kelpi's plugin SDK is not on npm, so `src/kelpi-api.ts` copies the parts of Kelpi's plugin types this plugin uses, from Kelpi at commit `897b5b8`.
+Kelp Tank is built on [Kelpi](https://github.com/benfriebe/kelpi) (github.com/benfriebe/kelpi). Kelpi's plugin SDK is not on npm, so `src/kelpi-api.ts` copies the parts of Kelpi's plugin types this plugin uses, from Kelpi at tag `v0.2.19`.
 
 ## Licence
 

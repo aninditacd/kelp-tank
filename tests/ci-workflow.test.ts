@@ -9,4 +9,12 @@ describe('CI workflow', () => {
             expect(workflow, step).toMatch(new RegExp(`run: pnpm ${step}\\s*$`, 'm'));
         }
     });
+
+    it("CI builds Kelpi's CLI at v0.2.19, the version the API types are copied from", () => {
+        const workflow = readFileSync('.github/workflows/ci.yml', 'utf8');
+        expect(workflow).toMatch(/^\s*KELPI_COMMIT: v0\.2\.19\s*$/m);
+        const header = readFileSync('src/kelpi-api.ts', 'utf8').split('*/')[0];
+        expect(header).toContain('v0.2.19');
+        expect(header).not.toContain('897b5b8');
+    });
 });

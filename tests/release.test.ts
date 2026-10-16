@@ -8,7 +8,7 @@ describe('the public release', () => {
         expect(workflow).toMatch(/^\s*tags:\s*\['v\*'\]\s*$/m);
         expect(workflow).toMatch(/^\s*contents:\s*write\s*$/m);
         // The same Kelpi CLI CI builds, so the package is packed by the version it was tested on.
-        expect(workflow).toContain('KELPI_COMMIT: 897b5b8');
+        expect(workflow).toContain('KELPI_COMMIT: v0.2.19');
         expect(workflow).toMatch(/^\s*- run: pnpm check\s*$/m);
         expect(workflow).toMatch(/^\s*- run: pnpm package\s*$/m);
         expect(workflow).toMatch(/gh release create "\$GITHUB_REF_NAME" kelp-tank\.kelpi-plugin/);

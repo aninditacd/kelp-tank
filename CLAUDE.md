@@ -24,7 +24,7 @@ TypeScript stays on 6.0 because `typescript-eslint` 8.71 does not support TypeSc
 - `src/decide-tank.ts` - `decideTank(world, previous)`, the pure decider that turns the world into a `TankState`: creature, state, ledges, relaying.
 - `src/shortcuts.ts` - each workspace's ⌘ shortcut, numbered by Kelpi's visible sidebar order with chords from its live keymap, and `ledgeLabel`, the text on a ledge.
 - `src/live-tank.ts` - `startLiveTank(kelpi, onState, onError)`, run by the view: keeps the `TankState` current from Kelpi's pushed events, resnapshots on a `gap` or a new epoch, and `jump(paneId)` focuses a session's pane.
-- `src/kelpi-api.ts` - the slice of Kelpi's plugin API this plugin calls, copied from Kelpi's SDK at commit `897b5b8` (the SDK is not on npm).
+- `src/kelpi-api.ts` - the slice of Kelpi's plugin API this plugin calls, copied from Kelpi's SDK at tag `v0.2.19` (the SDK is not on npm).
 - `scripts/build.mjs` - builds the installable package into `dist/`. The repo root is not a plugin package; `dist/` is.
 - `scripts/package.mjs` - packs a built directory into one `.kelpi-plugin` file with Kelpi's CLI, offline. `.github/workflows/release.yml` runs it on a `v*` tag and attaches `kelp-tank.kelpi-plugin` to a GitHub release.
 - `LICENSE` - MIT. `README.md` is written for strangers installing or building the plugin.
@@ -38,7 +38,7 @@ TypeScript stays on 6.0 because `typescript-eslint` 8.71 does not support TypeSc
 - `pnpm validate` - `kelpi plugin validate dist --json`, offline, using the CLI at `$KELPI_CLI` or `~/apps/kelpi/packages/cli/dist/kelpi.js`. It never uses the `kelpi` on `PATH`, which reaches Dita's live app.
 - `pnpm package` - builds `dist/` and packs it into `kelp-tank.kelpi-plugin` (gitignored), with the same CLI and the same dead socket as `pnpm validate`.
 - Pre-commit runs Prettier, ESLint and `vitest related` on staged files, then `tsc`. Never skip it with `--no-verify`.
-- CI (`.github/workflows/ci.yml`) runs on every PR. It builds Kelpi's CLI from github.com/benfriebe/kelpi at `897b5b8` to run `pnpm validate`.
+- CI (`.github/workflows/ci.yml`) runs on every PR. It builds Kelpi's CLI from github.com/benfriebe/kelpi at `v0.2.19` to run `pnpm validate`.
 
 With a private instance running (see below) and `kelpi_test` defined as in Kelpi's `docs/plugin-development.md`:
 
