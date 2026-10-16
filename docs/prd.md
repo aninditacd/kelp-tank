@@ -50,6 +50,23 @@ All creatures are cute, with big eyes and pink cheeks. A busy ledge is shared, n
 - A muted workspace's fish still go to the glass, but without the glow or bubble.
 - The tank makes no sound. Kelpi already sends its own notifications.
 
+**What a working creature is doing** (picked by Dita on 16 Oct 2026). These need Kelp Tank's optional Claude hook (see the README); without it, a working creature just swims.
+
+| What Claude is doing | What the creature shows |
+| --- | --- |
+| Reading or searching files (Read, Grep, Glob) | A few tiny pages circle it. |
+| Editing (Edit, Write, MultiEdit, NotebookEdit) | A pencil circles it, doodling a dotted loop. |
+| Running a command (Bash) | A tiny terminal screen scrolls beside it. |
+| The web (WebSearch, WebFetch) | A tiny globe orbits its head. |
+| Waiting on a subagent (Agent, Task) | A "..." thought bubble above it. |
+| Any other tool | Plain swimming. |
+
+- With tools overlapping, the creature shows the newest one still running. A failed tool clears like a finished one, and every prop goes when the turn ends. A prop stays a second after a quick tool, so it does not flicker.
+- **Tired:** a working turn of 10 minutes or more swims slower, with its nose drooping, half-shut eyes and a sweat drop. It still shows its prop.
+- **Dozing:** when Claude reports a waiting session idle (its `idle_prompt` reminder), the creature shuts its eyes and sleeps on its own ledge's floor, never lower, with rising "z"s. A sleeping "wants Dita" creature keeps its glow and "!" but stops tapping. It wakes when its next turn starts or the session ends.
+- Rails show none of this: no props, no tired look and no dozing. They keep following their conductor.
+- The plugin reads only tool names, never what a tool was given or returned.
+
 **Interaction**
 
 - Hovering a fish shows its session name, workspace and state.

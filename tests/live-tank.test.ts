@@ -16,6 +16,7 @@ import {
 } from './support/recorded-run';
 import { footerEvents, footerPaneId, footerSnapshot, footerSnapshotAt } from './support/footer-run';
 import { babyEvents, babyPaneId, babySnapshot, hookEvents } from './support/baby-fish-run';
+import { activityEvents, activityPaneId, activitySnapshot } from './support/tool-activity-run';
 
 /** A fake `window.kelpi`: the test delivers events and resolves each snapshot itself. */
 /**
@@ -640,6 +641,54 @@ describe('the live tank', () => {
             upTo(84).forEach(fake.deliver);
             fake.deliver(idlePrompt(200, 'someone.else'));
             expect(harbour(fake)?.dozing).toBe(false);
+        });
+    });
+
+    describe('the recorded tool activity run', () => {
+        const HARBOUR = activityPaneId('harbour-fish');
+        const LAGOON = activityPaneId('lagoon-fish');
+        const LIGHTHOUSE = activityPaneId('lighthouse-fish');
+        async function at(sequence: number) {
+            const fake = fakeKelpi();
+            await fake.resolveSnapshot(activitySnapshot);
+            activityEvents.filter((e) => e.sequence <= sequence).forEach(fake.deliver);
+            const of = (pane: string) =>
+                fake.states.at(-1)!.sessions.find((s) => s.paneId === pane)!;
+            return { harbour: of(HARBOUR), lagoon: of(LAGOON), lighthouse: of(LIGHTHOUSE) };
+        }
+
+        it('the recorded overlap of Read and Bash shows the latest still running', async () => {
+            expect((await at(117)).harbour.activity).toBe('command');
+            expect((await at(121)).harbour.activity).toBe('read');
+            expect((await at(124)).harbour.activity).toBeNull();
+        });
+
+        it('the recorded edit, web and agent tools each show their group', async () => {
+            expect((await at(131)).harbour.activity).toBe('edit');
+            expect((await at(136)).harbour.activity).toBe('web');
+            expect((await at(147)).harbour.activity).toBe('agent');
+            expect((await at(151)).harbour.activity).toBeNull();
+        });
+
+        it('the recorded failed Bash clears its terminal', async () => {
+            expect((await at(142)).harbour.activity).toBe('command');
+            expect((await at(145)).harbour.activity).toBeNull();
+        });
+
+        it('the recorded idle_prompt dozes a waiting session, and its next turn wakes it', async () => {
+            expect((await at(128)).lagoon).toMatchObject({ state: 'wantsYou', dozing: false });
+            expect((await at(129)).lagoon).toMatchObject({ state: 'wantsYou', dozing: true });
+            expect((await at(164)).harbour).toMatchObject({ state: 'wantsYou', dozing: true });
+            // Two routes wake it here, the start event and its working state; each alone is proven
+            // in tests/activity.test.ts and tests/decide-tank.test.ts.
+            expect((await at(171)).lagoon).toMatchObject({ state: 'working', dozing: false });
+        });
+
+        it("a recorded working session carries Kelpi's turn start", async () => {
+            const { lighthouse, lagoon } = await at(128);
+            expect(lighthouse.state).toBe('working');
+            expect(lighthouse.workingSince).toBeGreaterThan(1_700_000_000_000);
+            expect(lagoon.workingSince).toBeNull();
         });
     });
 });
