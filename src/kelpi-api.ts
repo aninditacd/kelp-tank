@@ -183,6 +183,8 @@ export interface SnapshotPane {
     status: PaneStatus;
     agentKind: AgentKind | null;
     agentSessionID: string | null;
+    /** When the agent's current turn began, in epoch milliseconds; null when it is not running. */
+    agentStartedAt?: number | null;
 }
 
 /** One workspace in a state snapshot. Kelpi sends more fields. */
@@ -232,4 +234,5 @@ export type StateChange =
           status: PaneStatus;
           agentSessionID: string | null;
           agentKind: AgentKind | null;
+          agentStartedAt?: number | null;
       };

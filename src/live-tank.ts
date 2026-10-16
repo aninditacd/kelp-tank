@@ -42,7 +42,13 @@ export function startLiveTank(
 ): { jump(paneId: string): Promise<void>; stop(): void } {
     let epoch: string | null = null;
     let sequence = -1;
-    let world: KelpiWorld = { workspaces: [], panes: [], topLevelOrder: [], groups: {} };
+    let world: KelpiWorld = {
+        workspaces: [],
+        panes: [],
+        topLevelOrder: [],
+        groups: {},
+        activity: {},
+    };
     let tank: TankState = { workspaces: [], sessions: [] };
     let pending: PluginEvent[] | null = null;
     let chords: readonly (string | null)[] = FALLBACK_CHORDS;

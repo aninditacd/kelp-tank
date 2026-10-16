@@ -34,6 +34,7 @@ function livePane(
         status: 'waitingForInput',
         agentKind: 'claude',
         agentSessionId: 'session-' + id,
+        agentStartedAt: null,
         ...overrides,
     };
 }
@@ -47,6 +48,7 @@ function handBuilt(panes: WorldPane[]): KelpiWorld {
         panes,
         topLevelOrder: [],
         groups: {},
+        activity: {},
     };
 }
 
