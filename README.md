@@ -29,6 +29,8 @@ Needs Kelpi 0.2.19 or later.
 
 With one extra Claude Code hook, each background agent a session starts shows as a tiny baby fish swimming beside that session's creature. A baby fish leaves when its agent stops, when the session ends, or after 20 minutes with no sign of life from the agent. Hovering or clicking a baby fish acts on its parent session. The tank works without it: with no hook, it simply shows no baby fish.
 
+![A session with four background agents, each a baby fish](docs/screenshots/baby-fish.png)
+
 1. Copy [`claude-hook/kelp-tank-hook.mjs`](claude-hook/kelp-tank-hook.mjs) from this repo somewhere on your computer. It needs Node 18 or later and nothing else.
 2. Add these hooks to your Claude Code settings (for example `~/.claude/settings.json`), with the path to your copy:
 
