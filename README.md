@@ -2,6 +2,8 @@
 
 Kelp Tank is a plugin for [Kelpi](https://github.com/benfriebe/kelpi), the terminal app. It shows each Claude Code session as a creature in a small 3D aquarium, so you can see at a glance which session needs you.
 
+![The tank animated: a glowing fish with a "!" bubble wants you, a working fish shows pages, a pencil, a terminal, a globe and a thought bubble in turn, a turtle swims with three baby fish, and a purple fish shows an update tick](docs/screenshots/kelp-tank.gif)
+
 ![Kelp Tank in Kelpi's sidebar](docs/screenshots/kelp-tank.png)
 
 A session that only posted an update, left, wears a tick and does not glow. The three beside it want you.
