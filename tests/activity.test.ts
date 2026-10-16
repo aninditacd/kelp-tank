@@ -124,7 +124,8 @@ describe('applyToolEvent', () => {
     });
 
     it('malformed data and subagent start and stop change nothing', () => {
-        const w = world();
+        // Bash is running, so an event wrongly read as its finish would show.
+        const w = applyToolEvent(world(), hook('PreToolUse', 'Bash'));
         for (const data of [
             null,
             'PreToolUse',

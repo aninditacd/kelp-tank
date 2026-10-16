@@ -9,11 +9,14 @@ import {
     followPoint,
     glassSpot,
     isGone,
+    isTired,
     nudgePoint,
+    restPoint,
     speedFor,
     swimPoint,
     TICK_FADE,
     TICK_HOLD,
+    TIRED_AFTER_MS,
     updatePose,
 } from '../../src/ui/behaviour';
 import type {
@@ -56,6 +59,9 @@ function session(
         state,
         relaysTo: null,
         babies: [],
+        activity: null,
+        dozing: false,
+        workingSince: null,
         ...extra,
     };
 }
@@ -251,5 +257,76 @@ describe('babyPoint', () => {
                 }
             }
         }
+    });
+});
+
+describe('tired and dozing', () => {
+    const NOW = 50_000_000;
+    const working = (startedMsAgo: number | null, role: SessionRole = 'fish') =>
+        session('p1', role, 'working', {
+            workingSince: startedMsAgo === null ? null : NOW - startedMsAgo,
+        });
+
+    it('the tired threshold is ten minutes', () => {
+        expect(TIRED_AFTER_MS).toBe(600_000);
+    });
+
+    it('a session is tired from exactly ten minutes, never before', () => {
+        expect(isTired(working(600_000), NOW)).toBe(true);
+        expect(isTired(working(599_999), NOW)).toBe(false);
+        expect(isTired(working(45 * 60_000), NOW)).toBe(true);
+    });
+
+    it('a session with no start time is never tired', () => {
+        expect(isTired(working(null), NOW)).toBe(false);
+    });
+
+    it('a session that is not working is never tired', () => {
+        const idle = session('p1', 'fish', 'idle', { workingSince: NOW - 30 * 60_000 });
+        expect(isTired(idle, NOW)).toBe(false);
+    });
+
+    it('a wants-you or update session is never tired, however long ago its turn began', () => {
+        for (const state of ['wantsYou', 'update'] as const) {
+            const waiting = session('p1', 'fish', state, { workingSince: NOW - 30 * 60_000 });
+            expect(isTired(waiting, NOW), state).toBe(false);
+        }
+    });
+
+    it('a rail is never tired', () => {
+        expect(isTired(working(30 * 60_000, 'rail'), NOW)).toBe(false);
+        expect(isTired(working(30 * 60_000, 'conductor'), NOW)).toBe(true);
+    });
+
+    it('dozing changes no goal: a dozing wants-you creature keeps its glass alert', () => {
+        for (const dozing of [false, true]) {
+            const goals = decideGoals(makeState([session('p1', 'fish', 'wantsYou', { dozing })]));
+            expect(goals.get('p1'), `dozing ${dozing}`).toEqual({ kind: 'glass', alert: true });
+        }
+    });
+
+    it('dozing changes no goal: a dozing update creature keeps its update goal', () => {
+        for (const dozing of [false, true]) {
+            const goals = decideGoals(makeState([session('p1', 'fish', 'update', { dozing })]));
+            expect(goals.get('p1'), `dozing ${dozing}`).toEqual({ kind: 'update' });
+        }
+    });
+
+    describe('restPoint', () => {
+        const box: Box = { x0: -1, x1: 1, y0: 0.5, y1: 1.5, z0: -0.5, z1: 0.5 };
+
+        it('rests on its own ledge floor, never below it, even from under the tank floor', () => {
+            expect(restPoint(box, 0.1, { x: 0.2, y: -3, z: 0.1 })).toEqual({
+                x: 0.2,
+                y: 0.5,
+                z: 0.1,
+            });
+            expect(restPoint(box, 0.1, { x: 0.2, y: 1.4, z: 0.1 }).y).toBe(0.5);
+        });
+
+        it('keeps the resting spot inside the side margins', () => {
+            expect(restPoint(box, 0.1, { x: 5, y: 1, z: 0 }).x).toBeCloseTo(0.9);
+            expect(restPoint(box, 0.1, { x: -5, y: 1, z: 0 }).x).toBeCloseTo(-0.9);
+        });
     });
 });

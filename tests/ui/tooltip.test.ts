@@ -17,6 +17,9 @@ const make = (state: SessionState): TankSession => ({
     state,
     relaysTo: null,
     babies: [],
+    activity: null,
+    dozing: false,
+    workingSince: null,
 });
 
 describe('tooltipText', () => {

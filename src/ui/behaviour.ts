@@ -1,4 +1,4 @@
-import type { SessionRole, TankState } from '../tank-state';
+import type { SessionRole, TankSession, TankState } from '../tank-state';
 
 export interface Vec3 {
     x: number;
@@ -215,4 +215,34 @@ export function bodyChanged(
     next: { role: SessionRole; colorHex: string },
 ): boolean {
     return current.role !== next.role || current.colorHex !== next.colorHex;
+}
+
+/** A turn this long or longer makes a working creature look tired. Dita picked ten minutes. */
+export const TIRED_AFTER_MS = 10 * 60 * 1000;
+
+/**
+ * Whether a session's creature looks tired at `now`: it is working, is not a rail, and its turn
+ * began `TIRED_AFTER_MS` or more ago. Tired is an overlay, so it never changes a goal.
+ */
+export function isTired(session: TankSession, now: number): boolean {
+    return (
+        session.role !== 'rail' &&
+        session.state === 'working' &&
+        session.workingSince !== null &&
+        now - session.workingSince >= TIRED_AFTER_MS
+    );
+}
+
+/**
+ * Where a dozing creature sleeps: on its own ledge's floor below where it is, kept `margin` from
+ * the side walls. It never sinks below the ledge, whatever `from` is.
+ */
+export function restPoint(box: Box, margin: number, from: Vec3): Vec3 {
+    const x0 = box.x0 + margin;
+    const x1 = box.x1 - margin;
+    return {
+        x: x0 > x1 ? (x0 + x1) / 2 : Math.min(x1, Math.max(x0, from.x)),
+        y: box.y0,
+        z: from.z,
+    };
 }

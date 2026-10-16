@@ -29,7 +29,18 @@ function session(
     state: SessionState,
     relaysTo: string | null = null,
 ): TankSession {
-    return { paneId, workspaceId, displayName: paneId, role, state, relaysTo, babies: [] };
+    return {
+        paneId,
+        workspaceId,
+        displayName: paneId,
+        role,
+        state,
+        relaysTo,
+        babies: [],
+        activity: null,
+        dozing: false,
+        workingSince: null,
+    };
 }
 
 const STATE: TankState = {
