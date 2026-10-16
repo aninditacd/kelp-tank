@@ -803,6 +803,27 @@ describe('the live tank', () => {
             expect(of(fake, HARBOUR).activity).toBe('command');
         });
 
+        it('an agent event the backend already applied does not clear a newer tool', async () => {
+            const fake = fakeKelpi({ activity: answer(['Read'], 131), holdActivity: true });
+            await fake.resolveSnapshot(rebuilt());
+            fake.deliver({
+                epoch,
+                sequence: 130,
+                name: 'agent.event',
+                data: {
+                    type: 'stop',
+                    paneID: HARBOUR,
+                    workspaceID: workspaceOf(HARBOUR),
+                    agent: 'claude',
+                    sessionID: HARBOUR_SESSION,
+                    status: 'waitingForInput',
+                },
+            });
+            fake.deliver(hookAt(131, 'PreToolUse', 'Read'));
+            await fake.answerActivity();
+            expect(of(fake, HARBOUR).activity).toBe('read');
+        });
+
         it('an answer from another epoch covers no events', async () => {
             const fake = fakeKelpi({
                 activity: answer(['Bash'], 999, 'an-older-epoch'),
