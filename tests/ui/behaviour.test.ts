@@ -334,10 +334,11 @@ describe('tired and dozing', () => {
 });
 
 describe('heldActivity', () => {
-    it('a new activity shows at once and holds for PROP_HOLD_S', () => {
+    it('a new activity shows at once and holds for one second', () => {
+        expect(PROP_HOLD_S).toBe(1);
         expect(heldActivity({ activity: 'read', until: 0 }, 'command', 10)).toEqual({
             activity: 'command',
-            until: 10 + PROP_HOLD_S,
+            until: 11,
         });
     });
 
