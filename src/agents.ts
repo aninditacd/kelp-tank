@@ -14,7 +14,14 @@ const REFRESH_MS = 60 * 1000;
 /** Every id the hook forwards, and the verb accepts, must match this. */
 export const HOOK_ID = /^[A-Za-z0-9_.:-]{1,128}$/;
 
-export const HOOK_EVENTS = ['SubagentStart', 'SubagentStop', 'PreToolUse', 'PostToolUse'] as const;
+/** `PostToolUseFailure` is Claude's end of a tool call that failed, which sends no `PostToolUse`. */
+export const HOOK_EVENTS = [
+    'SubagentStart',
+    'SubagentStop',
+    'PreToolUse',
+    'PostToolUse',
+    'PostToolUseFailure',
+] as const;
 export type HookEvent = (typeof HOOK_EVENTS)[number];
 
 /** One `kelpi kelp-tank` call. `agentId` is null for the parent session's own tool calls. */

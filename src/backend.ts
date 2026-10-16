@@ -6,7 +6,7 @@ import { quietAfter } from './quiet';
 const BOOK_KEY = 'babyAgents';
 const USAGE =
     'usage: kelpi kelp-tank <Event> --session <id> [--agent <id>] [--tool <name>]\n' +
-    '  <Event> is SubagentStart, SubagentStop, PreToolUse or PostToolUse.\n' +
+    '  <Event> is SubagentStart, SubagentStop, PreToolUse, PostToolUse or PostToolUseFailure.\n' +
     "  Kelp Tank's Claude hook (claude-hook/kelp-tank-hook.mjs) runs this for you.\n";
 
 export function activate(api: BackendApi) {

@@ -48,6 +48,15 @@ describe('parseHookArgv', () => {
         });
     });
 
+    it('reads a failed tool call', () => {
+        expect(parseHookArgv(['PostToolUseFailure', '--session', 's1', '--tool', 'Bash'])).toEqual({
+            event: 'PostToolUseFailure',
+            sessionId: 's1',
+            agentId: null,
+            toolName: 'Bash',
+        });
+    });
+
     it('rejects an unknown event, a missing session, a bad id or a stray argument', () => {
         expect(parseHookArgv([])).toBeNull();
         expect(parseHookArgv(['Notification', '--session', 's1'])).toBeNull();

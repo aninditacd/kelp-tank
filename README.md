@@ -64,12 +64,19 @@ With one extra Claude Code hook, each background agent a session starts shows as
           { "type": "command", "command": "node /path/to/kelp-tank-hook.mjs", "async": true }
         ]
       }
+    ],
+    "PostToolUseFailure": [
+      {
+        "hooks": [
+          { "type": "command", "command": "node /path/to/kelp-tank-hook.mjs", "async": true }
+        ]
+      }
     ]
   }
 }
 ```
 
-If your settings already have a `hooks` object, add these four entries to it rather than replacing it.
+If your settings already have a `hooks` object, add these five entries to it rather than replacing it.
 
 **What the hook sends.** It runs `kelpi kelp-tank` with only the hook's event name, the session id, the agent id and the tool name. It never sends the tool's input or output, Claude's reply or any path. It prints nothing, does nothing outside a Kelpi pane, and returns without waiting for Kelpi. Kelp Tank's backend keeps each running agent's id, its session id and when it was last seen, and saves that in Kelpi's plugin storage so the baby fish survive a restart. On each call it also sends a `dita.kelp-tank.hook` event inside Kelpi, carrying the pane, workspace, event name, session id, agent id and tool name. Kelpi delivers plugin events to every running plugin and plugin view, so any plugin you trust can see that feed.
 
