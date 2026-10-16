@@ -5,6 +5,7 @@ import {
     decideGoals,
     driftPoint,
     exitPoint,
+    babyPoint,
     followPoint,
     glassSpot,
     isGone,
@@ -225,5 +226,30 @@ describe('bodyChanged', () => {
         expect(bodyChanged(fish, { ...fish })).toBe(false);
         expect(bodyChanged(fish, { ...fish, role: 'rail' })).toBe(true);
         expect(bodyChanged(fish, { ...fish, colorHex: '#A98BE8' })).toBe(true);
+    });
+});
+
+describe('babyPoint', () => {
+    it('baby fish keep close to their parent and do not overlap', () => {
+        const parent = { x: 1, y: 2, z: 0.1 };
+        for (const heading of [
+            { x: 1, y: 0, z: 0 },
+            { x: -1, y: 0, z: 0 },
+            { x: 0.6, y: 0, z: -0.8 },
+        ]) {
+            for (const t of [0, 0.4, 7.3]) {
+                const spots = [0, 1, 2, 3, 4, 5].map((i) => babyPoint(parent, heading, i, t));
+                for (const [i, p] of spots.entries()) {
+                    const d = { x: p.x - parent.x, y: p.y - parent.y, z: p.z - parent.z };
+                    expect(Math.hypot(d.x, d.y, d.z), `baby ${i}`).toBeLessThan(0.5);
+                    // Beside and behind: never ahead of the parent's nose.
+                    expect(d.x * heading.x + d.y * heading.y + d.z * heading.z).toBeLessThan(0);
+                    for (const q of spots.slice(i + 1)) {
+                        const gap = Math.hypot(p.x - q.x, p.y - q.y, p.z - q.z);
+                        expect(gap, `babies ${i} and a later one`).toBeGreaterThan(0.08);
+                    }
+                }
+            }
+        }
     });
 });

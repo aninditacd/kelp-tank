@@ -55,6 +55,9 @@ describe('the recorded baby fish run', () => {
         expect((end.data as { type: string }).type).toBe('session-end');
         // In this run the background agent stopped before the session ended, so its stop is not
         // what removes the baby here: this uses the book from before that stop, still holding it.
+        // Two guards each keep these babies away: the decider skips a pane with no session id,
+        // and `liveAgents` skips a book entry for another session. Removing one alone stays
+        // green; tests/agents.test.ts proves the session id check on its own.
         const stillRunning = bookAt(stops[0].sequence + 1);
         expect(Object.keys(stillRunning.panes[PANE].agents)).toEqual([BACKGROUND]);
         expect(babiesAt(end.sequence, stillRunning)).toMatchObject({

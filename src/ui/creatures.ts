@@ -238,3 +238,19 @@ export function makeCreature(session: TankSession, colorHex: string): Creature {
     parts.group.userData.paneId = session.paneId;
     return { ...parts, scale };
 }
+
+/** A baby fish's size: about two thirds of a rail's. */
+export const BABY_SIZE = SIZE.rail * 0.67;
+
+/**
+ * Builds a baby fish for one of a session's background agents: a round little fry in a paler tint
+ * of the workspace colour, with oversized eyes. It carries its parent's pane id, so hovering or
+ * clicking it acts on the parent session.
+ */
+export function makeBaby(colorHex: string, parentPaneId: string): Creature {
+    const parts = buildFish(mix(colorHex, '#ffffff', 0.45), 0.42);
+    // Shorter nose to tail than a grown fish, so it reads as round.
+    parts.group.scale.set(BABY_SIZE * 0.85, BABY_SIZE, BABY_SIZE);
+    parts.group.userData.paneId = parentPaneId;
+    return { ...parts, scale: BABY_SIZE };
+}
