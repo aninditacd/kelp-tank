@@ -1,7 +1,7 @@
 {
   "id": "dita.kelp-tank",
   "name": "Kelp Tank",
-  "version": "0.2.0",
+  "version": "0.2.1",
   "apiVersion": 1,
   "trust": "full",
   "activation": "on-demand",
