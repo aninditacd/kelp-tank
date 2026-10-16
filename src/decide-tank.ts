@@ -43,22 +43,30 @@ function displayNameOf(pane: WorldPane): string {
 /**
  * `chords` are Kelpi's nine workspace shortcuts, from its keymap. `previous` is the last decision. A session whose pane has gone, or no longer runs an agent, is
  * reported `closed` once from it, so the scene can swim it off, and dropped the time after.
+ * `quiet` holds the panes whose last reply ended `Awaiting you: 0` (src/quiet.ts): such a pane
+ * that is waiting shows `update`, except a rail, which keeps relaying as before.
  */
 export function decideTank(
     world: KelpiWorld,
     previous: TankState | null,
     chords: readonly (string | null)[] = FALLBACK_CHORDS,
+    quiet: ReadonlySet<string> = new Set(),
 ): TankState {
     const live: TankSession[] = world.panes
         .filter((pane) => pane.agentKind !== null)
         .map((pane) => {
             const displayName = displayNameOf(pane);
+            const role = roleForName(displayName);
+            const state = stateOf(pane);
             return {
                 paneId: pane.id,
                 workspaceId: pane.workspaceId,
                 displayName,
-                role: roleForName(displayName),
-                state: stateOf(pane),
+                role,
+                state:
+                    state === 'wantsYou' && role !== 'rail' && quiet.has(pane.id)
+                        ? 'update'
+                        : state,
                 relaysTo: null,
             };
         });

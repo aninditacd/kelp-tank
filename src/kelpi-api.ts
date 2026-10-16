@@ -2,8 +2,8 @@
  * The slice of Kelpi's plugin API this plugin calls.
  *
  * Kelpi's SDK (`@kelpi/plugin-sdk`) is not published to npm, so these types are copied from
- * `packages/plugin-sdk/domain.d.ts` and `docs/plugins.md` at Kelpi commit 897b5b8. Add to them
- * only when the plugin starts calling something new.
+ * `packages/plugin-sdk/domain.d.ts`, `packages/plugin-sdk/index.d.ts` and `docs/plugins.md` at
+ * Kelpi tag v0.2.19. Add to them only when the plugin starts calling something new.
  */
 
 export type WorkspaceColor =
@@ -35,14 +35,69 @@ export interface BackendApi {
     workspaces: {
         list(options?: { groupID?: string }): Promise<WorkspaceInfo[]>;
     };
+    agents: {
+        /** One call per agent hook Kelpi handles (`agent.event`). Returns an unsubscribe. */
+        onEvent(
+            listener: (event: AgentHookEvent, raw: PluginEvent) => void | Promise<void>,
+        ): () => void;
+    };
 }
 
-/** One event Kelpi pushes to `events.on`. A `gap` event means some were dropped. */
+/**
+ * One event Kelpi pushes to `events.on`. A `gap` event means some were dropped. `pluginID` is set
+ * on events a plugin emitted itself; Kelpi's own events carry none.
+ */
 export interface PluginEvent {
     epoch: string;
     sequence: number;
     name: string;
     data: unknown;
+    pluginID?: string;
+}
+
+/** The wire verb an agent hook arrived as (Kelpi `docs/agent-lifecycle.md` section 7.7). */
+export type AgentHookEventType =
+    | 'start'
+    | 'stop'
+    | 'notification'
+    | 'error'
+    | 'session-start'
+    | 'session-end'
+    | 'permission-request';
+
+/** The `agent.event` payload. Optional fields are present only when the hook carried them. */
+export interface AgentHookEvent {
+    type: AgentHookEventType;
+    paneID: string;
+    workspaceID: string;
+    /** The pane's agent kind after the event; `claude` when none is recorded. */
+    agent: AgentKind;
+    /** The session the pane is bound to after the event. */
+    sessionID?: string;
+    /** The pane's status after Kelpi applied the event. */
+    status: PaneStatus;
+    /** Claude Notification only: `permission_prompt`, `idle_prompt`, `elicitation_dialog`, ... */
+    notificationType?: string;
+    /** `notification` only. */
+    title?: string;
+    body?: string;
+    /** `error`, and a `permission-request` deny when the provider gave one. */
+    message?: string;
+    /** Claude Stop only: the final reply's text, capped at 64 KiB of UTF-8. */
+    lastAssistantMessage?: string;
+    /** Present (true) only when `lastAssistantMessage` was cut to the cap. */
+    lastAssistantMessageTruncated?: true;
+    transcriptPath?: string;
+    /** `stop` / `notification`, only when more than 0. */
+    backgroundTasks?: number;
+    /** Codex PermissionRequest (`notification`), and every `permission-request`. */
+    toolName?: string;
+    /** `permission-request` only: the decision Kelpi answered Claude with. */
+    behavior?: 'allow' | 'deny' | 'abstain';
+    /** `permission-request` only: the provider that was asked. */
+    provider?: string;
+    /** The pane's workspace is muted: honour it. */
+    muted?: true;
 }
 
 /** Kelpi's live keyboard map, as Help draws it (`docs/plugin-chrome.md`, "The keyboard map"). */
@@ -69,6 +124,10 @@ export interface ViewApi {
     storage: {
         get(key: string): Promise<unknown>;
         set(key: string, value: unknown): Promise<void>;
+    };
+    /** Invokes a command this plugin declares, which its backend registered. */
+    commands: {
+        execute<T = unknown>(id: string, args?: Record<string, unknown>): Promise<T>;
     };
     ui: {
         focusPane(workspaceID: string, paneID: string): Promise<void>;

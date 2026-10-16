@@ -10,8 +10,8 @@ TypeScript stays on 6.0 because `typescript-eslint` 8.71 does not support TypeSc
 
 ## Layout
 
-- `kelpi.plugin.json` - manifest. Id `dita.kelp-tank`, one view `dita.kelp-tank.home` (placements: pane, sidebar.primary, sidebar.secondary), one command `dita.kelp-tank.summary`.
-- `src/backend.ts` - exports `activate(api)`; registers the summary command, which returns `api.workspaces.list()`.
+- `kelpi.plugin.json` - manifest. Id `dita.kelp-tank`, one view `dita.kelp-tank.home` (placements: pane, sidebar.primary, sidebar.secondary), two commands, `dita.kelp-tank.summary` and `dita.kelp-tank.quiet`.
+- `src/backend.ts` - exports `activate(api)`; registers the summary command, which returns `api.workspaces.list()`, and the quiet command; it also listens to `api.agents.onEvent` to keep the quiet panes (see `src/quiet.ts`).
 - `src/ui/index.html`, `src/ui/app.ts` - the view. `app.ts` creates the tank, feeds it from `startLiveTank`, and passes each click to `jump`.
 - `src/ui/tank.ts` - `createTank(canvas, { onSelect(paneId) })` returns `{ setState(state), recall(memory), snapshot(), dispose() }`. `recall` hands it what an earlier page remembered, before the first state, so creatures and the zoom and scroll come back; `snapshot` is what to remember now. It draws the scene, re-lays it on resize, moves the creatures, and calls `onSelect` once per click on a creature with its pane id (never for empty water). That signature is the click hand-off to `app.ts`'s `jump`; keep it stable.
 - `src/ui/behaviour.ts` - pure: `decideGoals(state)` and the points creatures head for. `src/ui/tooltip.ts` - hover text. `src/ui/pick.ts` - the pane id under the pointer. All unit-tested in `tests/ui/`.
@@ -20,11 +20,12 @@ TypeScript stays on 6.0 because `typescript-eslint` 8.71 does not support TypeSc
 - `src/ui/view.ts` - pure zoom and scroll maths: the reset view, zoom around the pointer, scrolling, wheel input and the camera. `src/ui/hidden.ts` - pure: which workspaces the tank draws, the menu's rows, the hidden-waiting dot, and the hidden set in Kelpi plugin storage (`hiddenWorkspaces`). Both are unit-tested in `tests/ui/`.
 - `src/ui/memory.ts` - pure: where each creature starts on a new page and the view it opens at, from what the tank remembered in Kelpi plugin storage (`tankMemory`). Kelpi rebuilds a sidebar view's page on every workspace switch and gives a sidebar no view state, so this is how the tank keeps its state. Unit-tested in `tests/ui/memory.test.ts`.
 - `src/ui/workspace-menu.ts` - the corner menu's DOM, drawn from `hidden.ts`. Not unit-tested: DOM only.
+- `src/quiet.ts` - pure: `awaitingCount(reply)` reads the `Awaiting you: <n>` footer from a reply's last non-empty line, and `quietAfter(quiet, event)` keeps the set of panes whose last reply ended `Awaiting you: 0`. The backend (`src/backend.ts`) keeps that set in memory from `api.agents.onEvent` and answers the `dita.kelp-tank.quiet` command with it; the view asks after every snapshot and also applies Kelpi's `agent.event` events. Reply text is never stored, logged or sent. Unit-tested in `tests/quiet.test.ts`.
 - `src/kelpi-world.ts` - Kelpi's workspaces and panes as plain data, built from a snapshot and kept current by applying `state.changed` events.
-- `src/decide-tank.ts` - `decideTank(world, previous)`, the pure decider that turns the world into a `TankState`: creature, state, ledges, relaying.
+- `src/decide-tank.ts` - `decideTank(world, previous, chords, quiet)`, the pure decider that turns the world into a `TankState`: creature, state (`update` for a waiting, quiet, non-rail pane), ledges, relaying.
 - `src/shortcuts.ts` - each workspace's ⌘ shortcut, numbered by Kelpi's visible sidebar order with chords from its live keymap, and `ledgeLabel`, the text on a ledge.
 - `src/live-tank.ts` - `startLiveTank(kelpi, onState, onError)`, run by the view: keeps the `TankState` current from Kelpi's pushed events, resnapshots on a `gap` or a new epoch, and `jump(paneId)` focuses a session's pane.
-- `src/kelpi-api.ts` - the slice of Kelpi's plugin API this plugin calls, copied from Kelpi's SDK at commit `897b5b8` (the SDK is not on npm).
+- `src/kelpi-api.ts` - the slice of Kelpi's plugin API this plugin calls, copied from Kelpi's SDK at tag `v0.2.19` (the SDK is not on npm).
 - `scripts/build.mjs` - builds the installable package into `dist/`. The repo root is not a plugin package; `dist/` is.
 - `scripts/package.mjs` - packs a built directory into one `.kelpi-plugin` file with Kelpi's CLI, offline. `.github/workflows/release.yml` runs it on a `v*` tag and attaches `kelp-tank.kelpi-plugin` to a GitHub release.
 - `LICENSE` - MIT. `README.md` is written for strangers installing or building the plugin.
@@ -38,7 +39,7 @@ TypeScript stays on 6.0 because `typescript-eslint` 8.71 does not support TypeSc
 - `pnpm validate` - `kelpi plugin validate dist --json`, offline, using the CLI at `$KELPI_CLI` or `~/apps/kelpi/packages/cli/dist/kelpi.js`. It never uses the `kelpi` on `PATH`, which reaches Dita's live app.
 - `pnpm package` - builds `dist/` and packs it into `kelp-tank.kelpi-plugin` (gitignored), with the same CLI and the same dead socket as `pnpm validate`.
 - Pre-commit runs Prettier, ESLint and `vitest related` on staged files, then `tsc`. Never skip it with `--no-verify`.
-- CI (`.github/workflows/ci.yml`) runs on every PR. It builds Kelpi's CLI from github.com/benfriebe/kelpi at `897b5b8` to run `pnpm validate`.
+- CI (`.github/workflows/ci.yml`) runs on every PR. It builds Kelpi's CLI from github.com/benfriebe/kelpi at `v0.2.19` to run `pnpm validate`.
 
 With a private instance running (see below) and `kelpi_test` defined as in Kelpi's `docs/plugin-development.md`:
 
@@ -62,4 +63,5 @@ A plugin backend does hear Kelpi's session events, pushed through `api.events.on
 - The real run is `tests/fixtures/private-instance-run.jsonl`; `tests/fixtures/README.md` explains it. Test new logic against it.
 - `docs/prd.md`, "Answered questions", records where the session name lives (the pane `title`, after a status prefix), focus from a plugin, and the frame rate.
 - `src/tank-state.ts` is the shared shape the decider produces and the scene consumes.
+- `tests/fixtures/update-footer-run.jsonl` is the second recorded run: real Claude replies for the footer rule, from Kelpi 0.2.19. `tests/fixtures/README.md` says which lines were driven.
 - `probes/tank-probe/` is the throwaway plugin that measured all this. It is not part of Kelp Tank.

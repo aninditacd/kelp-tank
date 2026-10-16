@@ -13,9 +13,14 @@ import {
     snapshotAt,
     workspaceIdByName,
 } from './support/recorded-run';
+import { footerEvents, footerPaneId, footerSnapshot, footerSnapshotAt } from './support/footer-run';
 
 /** A fake `window.kelpi`: the test delivers events and resolves each snapshot itself. */
-function fakeKelpi() {
+/**
+ * `seed` is what the backend's quiet command answers: pane ids, or an Error to fail with.
+ * `holdSeed` leaves each answer pending until the test calls `answerSeed`.
+ */
+function fakeKelpi(options: { seed?: string[] | Error; holdSeed?: boolean } = {}) {
     const listeners: ((event: PluginEvent) => void)[] = [];
     const snapshots: { resolve(s: Snapshot): void; reject(e: Error): void }[] = [];
     const focusPane = vi.fn<(workspaceID: string, paneID: string) => Promise<void>>(async () => {});
@@ -25,7 +30,15 @@ function fakeKelpi() {
         onError?: (error: Error) => void;
     } = {};
     const errors: Error[] = [];
+    const seeds: { resolve(): void }[] = [];
+    const execute = vi.fn(async (id: string) => {
+        expect(id).toBe('dita.kelp-tank.quiet');
+        if (options.holdSeed) await new Promise<void>((resolve) => seeds.push({ resolve }));
+        if (options.seed instanceof Error) throw options.seed;
+        return { panes: options.seed ?? [] };
+    });
     const kelpi = {
+        commands: { execute: execute as never },
         snapshot: vi.fn(
             () => new Promise<Snapshot>((resolve, reject) => snapshots.push({ resolve, reject })),
         ),
@@ -64,6 +77,11 @@ function fakeKelpi() {
         chrome,
         deliver: (event: PluginEvent) => listeners.forEach((listener) => listener(event)),
         /** Resolves the oldest unresolved snapshot request, then lets its handler run. */
+        execute,
+        answerSeed: async () => {
+            seeds.shift()!.resolve();
+            await new Promise((resolve) => setImmediate(resolve));
+        },
         resolveSnapshot: async (snapshot: Snapshot) => {
             snapshots.shift()!.resolve(snapshot);
             await new Promise((resolve) => setImmediate(resolve));
@@ -287,5 +305,89 @@ describe('the live tank', () => {
         await fake.rejectSnapshot(new Error('busy'));
         fake.deliver(recordedEvents.find((e) => e.sequence === 241)!);
         expect(fake.kelpi.snapshot).toHaveBeenCalledTimes(3);
+    });
+
+    describe('quiet sessions', () => {
+        const eventsUpTo = (sequence: number) => footerEvents.filter((e) => e.sequence <= sequence);
+        const stateOf = (fake: ReturnType<typeof fakeKelpi>, label: string) =>
+            fake.states.at(-1)?.sessions.find((s) => s.paneId === footerPaneId(label))?.state;
+
+        it('a footer-0 stop turns a waiting fish to update as the event arrives', async () => {
+            const fake = fakeKelpi();
+            await fake.resolveSnapshot(footerSnapshot);
+            eventsUpTo(136).forEach(fake.deliver);
+            expect(stateOf(fake, 'update-fish')).toBe('wantsYou');
+            fake.deliver(footerEvents.find((e) => e.sequence === 137)!);
+            expect(stateOf(fake, 'update-fish')).toBe('update');
+        });
+
+        it('a footer-2 stop leaves the fish wanting you', async () => {
+            const fake = fakeKelpi();
+            await fake.resolveSnapshot(footerSnapshot);
+            eventsUpTo(155).forEach(fake.deliver);
+            expect(stateOf(fake, 'ask-fish')).toBe('wantsYou');
+        });
+
+        it('an agent event sent by a plugin is ignored', async () => {
+            const fake = fakeKelpi();
+            await fake.resolveSnapshot(footerSnapshot);
+            eventsUpTo(136).forEach(fake.deliver);
+            fake.deliver({
+                ...footerEvents.find((e) => e.sequence === 137)!,
+                pluginID: 'someone.else',
+            });
+            expect(stateOf(fake, 'update-fish')).toBe('wantsYou');
+        });
+
+        it('a new page takes the quiet panes from the backend', async () => {
+            // A page opened just after the stop at 137: it never heard the stop.
+            const fake = fakeKelpi({ seed: [footerPaneId('update-fish')] });
+            await fake.resolveSnapshot(footerSnapshotAt(137));
+            expect(fake.execute).toHaveBeenCalledTimes(1);
+            expect(stateOf(fake, 'update-fish')).toBe('update');
+            const bare = fakeKelpi();
+            await bare.resolveSnapshot(footerSnapshotAt(137));
+            expect(stateOf(bare, 'update-fish')).toBe('wantsYou');
+        });
+
+        it('a live event newer than the seed beats the seed', async () => {
+            const fake = fakeKelpi({ seed: [footerPaneId('perm-fish')], holdSeed: true });
+            await fake.resolveSnapshot(footerSnapshot);
+            // The page hears the run's events while the backend's answer is still on its way.
+            eventsUpTo(292).forEach(fake.deliver);
+            await fake.answerSeed();
+            expect(stateOf(fake, 'perm-fish')).toBe('wantsYou');
+        });
+
+        it('a failed seed leaves waiting fish wanting you and shows no error', async () => {
+            const fake = fakeKelpi({ seed: new Error('no backend') });
+            await fake.resolveSnapshot(footerSnapshot);
+            eventsUpTo(136).forEach(fake.deliver);
+            expect(stateOf(fake, 'update-fish')).toBe('wantsYou');
+            expect(fake.errors).toEqual([]);
+        });
+
+        it('a seed that never answers still draws the tank after the wait', async () => {
+            vi.useFakeTimers({ toFake: ['setTimeout'] });
+            const fake = fakeKelpi({ holdSeed: true });
+            await fake.resolveSnapshot(footerSnapshotAt(137));
+            expect(fake.states).toHaveLength(0);
+            await vi.advanceTimersByTimeAsync(3000);
+            expect(stateOf(fake, 'update-fish')).toBe('wantsYou');
+            expect(fake.errors).toEqual([]);
+        });
+
+        it('a Kelpi without commands still draws the tank', async () => {
+            const fake = fakeKelpi();
+            (fake.kelpi as { commands?: unknown }).commands = undefined;
+            await fake.resolveSnapshot(footerSnapshotAt(137));
+            expect(stateOf(fake, 'update-fish')).toBe('wantsYou');
+            expect(fake.errors).toEqual([]);
+        });
+
+        it('the live tank never writes to storage', () => {
+            const source = readFileSync('src/live-tank.ts', 'utf8');
+            expect(source).not.toMatch(/storage/);
+        });
     });
 });

@@ -8,4 +8,8 @@ describe('CLAUDE.md', () => {
         expect(text).toContain('plugin dev dist');
         expect(text.toLowerCase()).not.toContain('no toolchain');
     });
+
+    it('the README states Kelpi 0.2.19 as the minimum', () => {
+        expect(readFileSync('README.md', 'utf8')).toContain('Needs Kelpi 0.2.19 or later');
+    });
 });

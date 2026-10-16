@@ -1,10 +1,16 @@
 import { decideTank } from './decide-tank';
-import type { PluginEvent, Snapshot, ViewApi } from './kelpi-api';
+import type { AgentHookEvent, PluginEvent, Snapshot, ViewApi } from './kelpi-api';
 import { applyChanges, worldFromSnapshot, type KelpiWorld } from './kelpi-world';
+import { quietAfter } from './quiet';
 import { chordsFromKeymap, FALLBACK_CHORDS } from './shortcuts';
 import type { TankState } from './tank-state';
 
-export type LiveKelpi = Pick<ViewApi, 'snapshot' | 'events' | 'ui'>;
+export type LiveKelpi = Pick<ViewApi, 'snapshot' | 'events' | 'ui' | 'commands'>;
+
+/** The backend command that lists the panes whose last reply ended `Awaiting you: 0`. */
+const QUIET_COMMAND = 'dita.kelp-tank.quiet';
+/** How long a snapshot waits for the backend's answer before showing every waiting fish as wanting the owner. */
+const QUIET_WAIT_MS = 3000;
 
 /**
  * Keeps a `TankState` current from Kelpi's pushed events, without polling, and jumps to a
@@ -12,6 +18,11 @@ export type LiveKelpi = Pick<ViewApi, 'snapshot' | 'events' | 'ui'>;
  * discard events at or before its sequence, and take a fresh snapshot on a `gap` event or a
  * new epoch. Every other event name, `daemon.notification` included, is ignored. Workspace
  * shortcuts come from Kelpi's live keymap through `ui.onChrome`; without one they stay ⌘1 to ⌘9.
+ *
+ * Kelpi's own `agent.event` events (those with no `pluginID`) mark a pane quiet after a reply that
+ * ends `Awaiting you: 0` (src/quiet.ts). A rebuilt page missed those events, so every snapshot is
+ * followed by a request to the backend, which kept the quiet panes, before buffered events apply.
+ * A failed request leaves every waiting fish wanting the owner: the safe side.
  */
 export function startLiveTank(
     kelpi: LiveKelpi,
@@ -24,40 +35,78 @@ export function startLiveTank(
     let tank: TankState = { workspaces: [], sessions: [] };
     let pending: PluginEvent[] | null = null;
     let chords: readonly (string | null)[] = FALLBACK_CHORDS;
+    let quiet: ReadonlySet<string> = new Set();
 
     const needsResync = (event: PluginEvent) => event.name === 'gap' || event.epoch !== epoch;
 
     function apply(event: PluginEvent) {
         if (event.sequence <= sequence) return;
         sequence = event.sequence;
+        if (event.name === 'agent.event' && event.pluginID === undefined) {
+            quiet = quietAfter(quiet, event.data as AgentHookEvent);
+            tank = decideTank(world, tank, chords, quiet);
+            onState(tank);
+            return;
+        }
         if (event.name !== 'state.changed') return;
         world = applyChanges(world, event.data as unknown[]);
-        tank = decideTank(world, tank, chords);
+        tank = decideTank(world, tank, chords, quiet);
         onState(tank);
     }
 
     function resync() {
         const buffered: PluginEvent[] = [];
         pending = buffered;
-        kelpi.snapshot().then(
-            (snapshot: Snapshot) => {
-                pending = null;
-                epoch = snapshot.epoch;
-                sequence = snapshot.sequence;
-                world = worldFromSnapshot(snapshot.state);
-                tank = decideTank(world, null, chords);
-                onState(tank);
-                for (const event of buffered) {
-                    if (needsResync(event)) return resync();
-                    apply(event);
+        // Events stay buffered until the backend has answered too, so a live event always lands on
+        // top of the answer and never under it.
+        // The wait is bounded and a throw is caught: the tank is the plugin's one job, so a backend
+        // that is slow to start, silent or missing must cost the quiet marks and nothing else.
+        const quietPanes = (): Promise<string[]> => {
+            const answered = new Promise<string[]>((resolve) => {
+                try {
+                    kelpi.commands.execute<{ panes?: unknown }>(QUIET_COMMAND).then(
+                        (answer) =>
+                            resolve(
+                                Array.isArray(answer?.panes)
+                                    ? answer.panes.filter(
+                                          (id): id is string => typeof id === 'string',
+                                      )
+                                    : [],
+                            ),
+                        () => resolve([]),
+                    );
+                } catch {
+                    resolve([]);
                 }
-            },
-            (error: unknown) => {
-                pending = null;
-                epoch = null; // so the next event retries the snapshot
-                onError(error instanceof Error ? error : new Error(String(error)));
-            },
-        );
+            });
+            const waited = new Promise<string[]>((resolve) =>
+                setTimeout(() => resolve([]), QUIET_WAIT_MS),
+            );
+            return Promise.race([answered, waited]);
+        };
+        kelpi
+            .snapshot()
+            .then(async (snapshot: Snapshot) => ({ snapshot, panes: await quietPanes() }))
+            .then(
+                ({ snapshot, panes }) => {
+                    pending = null;
+                    epoch = snapshot.epoch;
+                    sequence = snapshot.sequence;
+                    world = worldFromSnapshot(snapshot.state);
+                    quiet = new Set(panes);
+                    tank = decideTank(world, null, chords, quiet);
+                    onState(tank);
+                    for (const event of buffered) {
+                        if (needsResync(event)) return resync();
+                        apply(event);
+                    }
+                },
+                (error: unknown) => {
+                    pending = null;
+                    epoch = null; // so the next event retries the snapshot
+                    onError(error instanceof Error ? error : new Error(String(error)));
+                },
+            );
     }
 
     const off = kelpi.events.on('*', (event) => {
@@ -72,7 +121,7 @@ export function startLiveTank(
             if (JSON.stringify(next) === JSON.stringify(chords)) return;
             chords = next;
             if (epoch === null) return;
-            tank = decideTank(world, tank, chords);
+            tank = decideTank(world, tank, chords, quiet);
             onState(tank);
         },
         () => {},

@@ -38,10 +38,13 @@ All creatures are cute, with big eyes and pink cheeks. A busy ledge is shared, n
 | --- | --- |
 | Working | Swims around its workspace's ledge. |
 | Wants Dita | Swims to the glass and taps, glows, and shows a "!" speech bubble above it. |
+| Update | Swims to the glass without tapping, wears a small mint tick for about three seconds, then rests like an idle creature. No glow, no "!". |
 | Idle | Drifts slowly near the bottom of its ledge. |
 | Closed | Swims off the side and disappears. |
 
-- "Finished" and "asking a question" are the same state. Both mean the session is waiting on Dita.
+- A finished turn is "wants Dita" or "update", read from the last line of Claude's final reply (decided 16 Oct 2026). Dita ends each reply with `Awaiting you: <n> - <what it holds>`. A last line of `Awaiting you: 0` makes the creature an update. Anything else is "wants Dita": a footer of 1 or more, no footer, a reply Kelpi cut short, a permission prompt, or a footer quoted earlier in the reply.
+- Only an "update" ever differs from the table above: a rail still nudges its conductor, a muted workspace's creature still goes to the glass without a glow, and the hidden-workspace dot lights only for "wants Dita".
+- A session's reply text never leaves the plugin. The plugin keeps only which sessions are quiet, in memory.
 - **A rail never asks Dita directly.** A waiting rail swims to its conductor and nudges it, with no glow or bubble.
 - If a rail's conductor has closed, a waiting rail glows like any other fish.
 - A muted workspace's fish still go to the glass, but without the glow or bubble.

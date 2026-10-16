@@ -52,6 +52,25 @@ const BUBBLE_TEXTURE = canvasTexture(128, 128, (x) => {
     x.fill();
 });
 
+const TICK_TEXTURE = canvasTexture(128, 128, (x) => {
+    x.fillStyle = '#6fd9a8';
+    x.strokeStyle = '#ffffff';
+    x.lineWidth = 7;
+    x.beginPath();
+    x.arc(64, 64, 46, 0, Math.PI * 2);
+    x.fill();
+    x.stroke();
+    x.strokeStyle = '#ffffff';
+    x.lineWidth = 13;
+    x.lineCap = 'round';
+    x.lineJoin = 'round';
+    x.beginPath();
+    x.moveTo(42, 66);
+    x.lineTo(57, 81);
+    x.lineTo(88, 47);
+    x.stroke();
+});
+
 const GLOW_TEXTURE = canvasTexture(128, 128, (x, w, h) => {
     const g = x.createRadialGradient(64, 64, 0, 64, 64, 64);
     g.addColorStop(0, 'rgba(255,255,255,1)');
@@ -89,6 +108,22 @@ export function makeAlertFx() {
     return { bubble, glow, amount: 0 };
 }
 export type AlertFx = ReturnType<typeof makeAlertFx>;
+
+/** The small mint tick an update creature wears for a moment. It starts hidden. */
+export function makeTickFx() {
+    const tick = new Sprite(
+        new SpriteMaterial({
+            map: TICK_TEXTURE,
+            fog: false,
+            transparent: true,
+            depthTest: false,
+        }),
+    );
+    tick.renderOrder = 10;
+    tick.visible = false;
+    return tick;
+}
+export type TickFx = ReturnType<typeof makeTickFx>;
 
 /** A white ring that the tank grows and fades where a creature taps the glass. */
 export function makeRipple(): Mesh {

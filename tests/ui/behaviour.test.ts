@@ -11,6 +11,9 @@ import {
     nudgePoint,
     speedFor,
     swimPoint,
+    TICK_FADE,
+    TICK_HOLD,
+    updatePose,
 } from '../../src/ui/behaviour';
 import type {
     SessionRole,
@@ -87,6 +90,26 @@ describe('decideGoals', () => {
         ]);
         expect(goalOf(state, 'quiet-fish')).toEqual({ kind: 'glass', alert: false });
         expect(goalOf(state, 'loud-fish')).toEqual({ kind: 'glass', alert: true });
+    });
+
+    it('an update creature heads for the glass with no glow or bubble', () => {
+        const state = makeState([session('u', 'fish', 'update')]);
+        expect(goalOf(state, 'u')).toEqual({ kind: 'update' });
+        expect(speedFor('fish', { kind: 'update' })).toBe(
+            speedFor('fish', { kind: 'glass', alert: false }),
+        );
+    });
+
+    it("an update's tick holds, fades, then the creature rests like an idle one", () => {
+        expect(updatePose(0)).toEqual({ at: 'glass', tick: 1 });
+        expect(updatePose(TICK_HOLD - 0.1)).toEqual({ at: 'glass', tick: 1 });
+        const half = updatePose(TICK_HOLD + TICK_FADE / 2);
+        expect(half.at).toBe('glass');
+        expect(half.tick).toBeCloseTo(0.5, 5);
+        expect(updatePose(TICK_HOLD + TICK_FADE)).toEqual({ at: 'drift', tick: 0 });
+        expect(updatePose(60)).toEqual({ at: 'drift', tick: 0 });
+        expect(TICK_HOLD).toBe(3);
+        expect(TICK_FADE).toBe(1.5);
     });
 
     it('a relaying rail swims beside its conductor with no glow', () => {

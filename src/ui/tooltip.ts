@@ -3,6 +3,7 @@ import type { SessionState, TankSession, TankWorkspace } from '../tank-state';
 const LABEL: Record<SessionState, string> = {
     working: 'Working',
     wantsYou: 'Wants you',
+    update: 'Update',
     idle: 'Idle',
     closed: 'Closed',
 };

@@ -17,6 +17,7 @@ export type Goal =
     | { kind: 'swim' }
     | { kind: 'drift' }
     | { kind: 'glass'; alert: boolean }
+    | { kind: 'update' }
     | { kind: 'nudge'; leader: string; slot: number }
     | { kind: 'follow'; leader: string; slot: number }
     | { kind: 'leave' };
@@ -52,6 +53,8 @@ export function decideGoals(state: TankState): Map<string, Goal> {
             goals.set(s.paneId, { kind: 'leave' });
         } else if (s.state === 'idle') {
             goals.set(s.paneId, { kind: 'drift' });
+        } else if (s.state === 'update') {
+            goals.set(s.paneId, { kind: 'update' });
         } else if (s.state === 'wantsYou') {
             const leader = s.relaysTo === null ? undefined : byPane.get(s.relaysTo);
             if (leader && leader.state !== 'closed') {
@@ -92,6 +95,7 @@ export function speedFor(role: SessionRole, goal: Goal): number {
         case 'swim':
             return SPEED[role];
         case 'glass':
+        case 'update':
             return SPEED[role] * 1.5;
         case 'nudge':
             return 0.6;
@@ -100,6 +104,23 @@ export function speedFor(role: SessionRole, goal: Goal): number {
         case 'leave':
             return 0.5;
     }
+}
+
+/** How long an update creature's tick shows at full strength, then how long it takes to fade. */
+export const TICK_HOLD = 3;
+export const TICK_FADE = 1.5;
+
+/**
+ * Where an update creature is `elapsed` seconds after its update began: at the glass with its
+ * tick fading in the last `TICK_FADE` seconds, then resting like an idle creature. It never has
+ * a glow or a "!".
+ */
+export function updatePose(elapsed: number): { at: 'glass' | 'drift'; tick: number } {
+    if (elapsed < TICK_HOLD) return { at: 'glass', tick: 1 };
+    if (elapsed < TICK_HOLD + TICK_FADE) {
+        return { at: 'glass', tick: 1 - (elapsed - TICK_HOLD) / TICK_FADE };
+    }
+    return { at: 'drift', tick: 0 };
 }
 
 /** `a + (b - a) * t`, or the midpoint when the range is inverted (a box smaller than its margins). */
