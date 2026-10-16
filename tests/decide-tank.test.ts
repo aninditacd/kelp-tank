@@ -2,7 +2,7 @@ import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 import { EMPTY_BOOK, type AgentBook } from '../src/agents';
 import { decideTank, roleForName, sessionName } from '../src/decide-tank';
-import type { KelpiWorld, WorldPane } from '../src/kelpi-world';
+import { applyChanges, type KelpiWorld, type WorldPane } from '../src/kelpi-world';
 import { FALLBACK_CHORDS } from '../src/shortcuts';
 import type { TankSession, TankState } from '../src/tank-state';
 import {
@@ -34,6 +34,7 @@ function livePane(
         status: 'waitingForInput',
         agentKind: 'claude',
         agentSessionId: 'session-' + id,
+        agentStartedAt: null,
         ...overrides,
     };
 }
@@ -47,6 +48,7 @@ function handBuilt(panes: WorldPane[]): KelpiWorld {
         panes,
         topLevelOrder: [],
         groups: {},
+        activity: {},
     };
 }
 
@@ -460,5 +462,158 @@ describe('baby fish', () => {
             state: 'closed',
             babies: [],
         });
+    });
+});
+
+describe('activity, doze and turn start', () => {
+    const tracked = (
+        paneId: string,
+        tools: string[],
+        dozing = false,
+        sessionId = 'session-' + paneId,
+    ) => ({ [paneId]: { sessionId, tools, dozing } });
+    const decided = (
+        panes: WorldPane[],
+        activity: KelpiWorld['activity'],
+        quiet: ReadonlySet<string> = new Set(),
+    ) => decideTank({ ...handBuilt(panes), activity }, null, FALLBACK_CHORDS, quiet).sessions;
+
+    it('a working session shows the group of its newest running tool', () => {
+        const [s] = decided(
+            [livePane('P1', 'A', 'harbour-fish', { status: 'running' })],
+            tracked('P1', ['Read', 'Bash']),
+        );
+        expect(s.activity).toBe('command');
+    });
+
+    it('overlapping tools show the most recent one still running', () => {
+        const [s] = decided(
+            [livePane('P1', 'A', 'harbour-fish', { status: 'running' })],
+            tracked('P1', ['Bash', 'Read']),
+        );
+        expect(s.activity).toBe('read');
+    });
+
+    it('a newest tool with no group shows plain working', () => {
+        const [s] = decided(
+            [livePane('P1', 'A', 'harbour-fish', { status: 'running' })],
+            tracked('P1', ['Read', 'mcp__x__y']),
+        );
+        expect(s.state).toBe('working');
+        expect(s.activity).toBeNull();
+    });
+
+    it('a working session with no running tool has no activity', () => {
+        const [s] = decided([livePane('P1', 'A', 'harbour-fish', { status: 'running' })], {});
+        expect(s.activity).toBeNull();
+    });
+
+    it('a session that is not working has no activity, even with a tool still running', () => {
+        const [s] = decided([livePane('P1', 'A', 'harbour-fish')], tracked('P1', ['Edit']));
+        expect(s.state).toBe('wantsYou');
+        expect(s.activity).toBeNull();
+    });
+
+    it("tools recorded under an older session id are not the session's", () => {
+        const [s] = decided(
+            [livePane('P1', 'A', 'harbour-fish', { status: 'running' })],
+            tracked('P1', ['Read'], false, 'session-old'),
+        );
+        expect(s.activity).toBeNull();
+    });
+
+    it('a wants-you session dozes when its pane dozes, and an update session too', () => {
+        const panes = [livePane('P1', 'A', 'harbour-fish'), livePane('P2', 'A', 'lagoon-fish')];
+        const sessions = decided(
+            panes,
+            { ...tracked('P1', [], true), ...tracked('P2', [], true) },
+            new Set(['P2']),
+        );
+        expect(sessions.map((s) => [s.state, s.dozing])).toEqual([
+            ['wantsYou', true],
+            ['update', true],
+        ]);
+    });
+
+    it('a waiting session whose pane is not dozing is awake', () => {
+        const [s] = decided([livePane('P1', 'A', 'harbour-fish')], tracked('P1', []));
+        expect(s.dozing).toBe(false);
+    });
+
+    it('a working or idle session never dozes', () => {
+        const sessions = decided(
+            [
+                livePane('P1', 'A', 'harbour-fish', { status: 'running' }),
+                livePane('P2', 'A', 'lagoon-fish', { status: 'idle' }),
+            ],
+            { ...tracked('P1', [], true), ...tracked('P2', [], true) },
+        );
+        expect(sessions.map((s) => s.dozing)).toEqual([false, false]);
+    });
+
+    it("a doze recorded under an older session id is not the session's", () => {
+        const [s] = decided(
+            [livePane('P1', 'A', 'harbour-fish')],
+            tracked('P1', [], true, 'session-old'),
+        );
+        expect(s.dozing).toBe(false);
+    });
+
+    it('a working rail shows no activity', () => {
+        const [s] = decided(
+            [livePane('P1', 'A', 'rail-a', { status: 'running' })],
+            tracked('P1', ['Read']),
+        );
+        expect(s.role).toBe('rail');
+        expect(s.activity).toBeNull();
+    });
+
+    it('a waiting rail never dozes', () => {
+        const [s] = decided([livePane('P1', 'A', 'rail-a')], tracked('P1', [], true));
+        expect(s.dozing).toBe(false);
+    });
+
+    it('a working session carries its turn start, and a waiting one carries null', () => {
+        const sessions = decided(
+            [
+                livePane('P1', 'A', 'harbour-fish', { status: 'running', agentStartedAt: 5_000 }),
+                livePane('P2', 'A', 'lagoon-fish', { agentStartedAt: 5_000 }),
+            ],
+            {},
+        );
+        expect(sessions.map((s) => s.workingSince)).toEqual([5_000, null]);
+    });
+
+    it('a session that closes drops its activity, doze and turn start', () => {
+        const panes = [
+            livePane('P1', 'A', 'harbour-fish', { status: 'running', agentStartedAt: 5_000 }),
+        ];
+        const before = decideTank({ ...handBuilt(panes), activity: tracked('P1', ['Read']) }, null);
+        expect(before.sessions[0].activity).toBe('read');
+        const after = decideTank(handBuilt([]), before);
+        expect(after.sessions[0]).toMatchObject({
+            state: 'closed',
+            activity: null,
+            dozing: false,
+            workingSince: null,
+        });
+    });
+
+    it('the recorded run without the hook shows no activity and no doze, and real turn starts', () => {
+        let world = worldAt(-1);
+        const states = [decideTank(world, null)];
+        for (const event of recordedEvents) {
+            if (event.name !== 'state.changed') continue;
+            world = applyChanges(world, event.data as unknown[]);
+            states.push(decideTank(world, states.at(-1)!));
+        }
+        const all = states.flatMap((state) => state.sessions);
+        expect(all.every((s) => s.activity === null && s.dozing === false)).toBe(true);
+        const working = all.filter((s) => s.state === 'working');
+        expect(working.length).toBeGreaterThan(0);
+        expect(working.every((s) => typeof s.workingSince === 'number')).toBe(true);
+        expect(all.filter((s) => s.state !== 'working').every((s) => s.workingSince === null)).toBe(
+            true,
+        );
     });
 });

@@ -11,6 +11,7 @@ A session that only posted an update, left, wears a tick and does not glow. The 
 - Each Kelpi workspace gets a rock ledge with its name, its shortcut and kelp in its colour.
 - A session is a round fish. A session named after a day, such as `wed-15-10-2026`, is a turtle. A name containing `conduct` is a pufferfish with a crown, and a name ending in `rail-a`, `rail-b` and so on, or a handover such as `rail-r2`, is a tiny fish that follows its conductor.
 - A working session swims around its ledge, and an idle one drifts slowly near it. A session waiting for you swims to the glass, glows and shows a "!" bubble. A session whose last reply ends `Awaiting you: 0` is only an update: it swims to the glass, wears a small tick for a moment, then rests. A waiting rail nudges its conductor instead, and a muted workspace never glows.
+- A turn that has run 10 minutes or more looks tired: a slower swim, a drooping nose and a sweat drop. A waiting session Claude reports idle falls asleep on its own ledge with rising "z"s, keeping its glow and "!" if it wants you. Rails never look tired or doze.
 - Click a creature to jump to its session. Pinch, ⌘-scroll or the + and − buttons zoom; plain scrolling moves around a tall tank. The menu hides workspaces.
 
 ## Install
@@ -28,6 +29,10 @@ Needs Kelpi 0.2.19 or later.
 ## Baby fish (optional)
 
 With one extra Claude Code hook, each background agent a session starts shows as a tiny baby fish swimming beside that session's creature. A baby fish leaves when its agent stops, when the session ends, or after 20 minutes with no sign of life from the agent. Hovering or clicking a baby fish acts on its parent session. The tank works without it: with no hook, it simply shows no baby fish.
+
+The same hook shows what a working creature is doing: pages circle it while Claude reads or searches files, a pencil doodles round it while Claude edits, a tiny terminal scrolls beside it for a command, a globe orbits it on the web, and a "..." thought bubble floats above it while a subagent works. Without the hook, a working creature just swims.
+
+![What a creature shows for each tool, tired and dozing, from Kelpi's private instance](docs/screenshots/activities.png)
 
 ![A session with four background agents, each a baby fish](docs/screenshots/baby-fish.png)
 
@@ -64,12 +69,19 @@ With one extra Claude Code hook, each background agent a session starts shows as
           { "type": "command", "command": "node /path/to/kelp-tank-hook.mjs", "async": true }
         ]
       }
+    ],
+    "PostToolUseFailure": [
+      {
+        "hooks": [
+          { "type": "command", "command": "node /path/to/kelp-tank-hook.mjs", "async": true }
+        ]
+      }
     ]
   }
 }
 ```
 
-If your settings already have a `hooks` object, add these four entries to it rather than replacing it.
+If your settings already have a `hooks` object, add these five entries to it rather than replacing it.
 
 **What the hook sends.** It runs `kelpi kelp-tank` with only the hook's event name, the session id, the agent id and the tool name. It never sends the tool's input or output, Claude's reply or any path. It prints nothing, does nothing outside a Kelpi pane, and returns without waiting for Kelpi. Kelp Tank's backend keeps each running agent's id, its session id and when it was last seen, and saves that in Kelpi's plugin storage so the baby fish survive a restart. On each call it also sends a `dita.kelp-tank.hook` event inside Kelpi, carrying the pane, workspace, event name, session id, agent id and tool name. Kelpi delivers plugin events to every running plugin and plugin view, so any plugin you trust can see that feed.
 

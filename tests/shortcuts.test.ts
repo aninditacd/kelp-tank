@@ -47,6 +47,7 @@ function topLevelWorld(count: number): KelpiWorld {
         panes: [],
         topLevelOrder: ids.map((id) => ({ kind: 'workspace', id })),
         groups: {},
+        activity: {},
     };
 }
 

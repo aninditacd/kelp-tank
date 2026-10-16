@@ -105,6 +105,35 @@ describe('the Kelpi world', () => {
         });
     });
 
+    it("agent-status-changed takes the turn's start time, and its absence reads as null", () => {
+        const change = {
+            kind: 'agent-status-changed',
+            workspaceID: 'w1',
+            paneID: 'p1',
+            status: 'running',
+            agentSessionID: 'session-p1',
+            agentKind: 'claude',
+        };
+        const started = applyChanges(world(), [{ ...change, agentStartedAt: 7_000 }]);
+        expect(started.panes[0].agentStartedAt).toBe(7_000);
+        const unknown = applyChanges(started, [{ ...change, status: 'idle' }]);
+        expect(unknown.panes[0].agentStartedAt).toBeNull();
+    });
+
+    it('a snapshot pane carries its turn start, and a world from a snapshot has no activity', () => {
+        const next = worldFromSnapshot({
+            ...snapshotState,
+            workspaces: [
+                {
+                    ...snapshotState.workspaces[0],
+                    panes: [pane('p9', { status: 'running', agentStartedAt: 4_000 })],
+                },
+            ],
+        });
+        expect(next.panes.find((p) => p.id === 'p9')?.agentStartedAt).toBe(4_000);
+        expect(next.activity).toEqual({});
+    });
+
     it("workspace-upserted updates a workspace's name, colour and muted flag", () => {
         const next = applyChanges(world(), [
             {

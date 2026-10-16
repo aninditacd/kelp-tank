@@ -1,5 +1,5 @@
-// Kelp Tank's Claude Code hook. Claude Code runs it for SubagentStart, SubagentStop, PreToolUse
-// and PostToolUse, with the hook payload on stdin. It hands the event, the session id, the agent
+// Kelp Tank's Claude Code hook. Claude Code runs it for SubagentStart, SubagentStop, PreToolUse,
+// PostToolUse and PostToolUseFailure, with the hook payload on stdin. It hands the event, the session id, the agent
 // id and the tool name to `kelpi kelp-tank`, and nothing else: never the tool input or output,
 // the reply text or any path. The README shows the settings block that installs it.
 //
@@ -9,7 +9,13 @@
 // Needs Node 18 or later and no packages.
 import { spawn } from 'node:child_process';
 
-const EVENTS = new Set(['SubagentStart', 'SubagentStop', 'PreToolUse', 'PostToolUse']);
+const EVENTS = new Set([
+    'SubagentStart',
+    'SubagentStop',
+    'PreToolUse',
+    'PostToolUse',
+    'PostToolUseFailure',
+]);
 // The same pattern as HOOK_ID in src/agents.ts, which the verb checks again.
 const ID = /^[A-Za-z0-9_.:-]{1,128}$/;
 

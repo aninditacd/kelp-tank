@@ -1,3 +1,4 @@
+import { wake, type PaneActivity } from './activity';
 import type {
     AgentKind,
     PaneStatus,
@@ -18,6 +19,12 @@ export interface KelpiWorld {
     /** Kelpi's sidebar: top-level entries, and each group's workspace ids in order. */
     topLevelOrder: SidebarId[];
     groups: Record<string, { childOrder: string[]; isCollapsed: boolean }>;
+    /**
+     * Per pane: the tools its Claude session is running and whether it dozes, from Kelp Tank's
+     * Claude hook and Kelpi's agent events (src/activity.ts). Empty after every snapshot, since
+     * events from before one cannot be trusted.
+     */
+    activity: Record<string, PaneActivity>;
 }
 
 export interface WorldWorkspace {
@@ -35,6 +42,8 @@ export interface WorldPane {
     status: PaneStatus;
     agentKind: AgentKind | null;
     agentSessionId: string | null;
+    /** When the agent's current turn began, in epoch milliseconds; null when it is not running. */
+    agentStartedAt: number | null;
 }
 
 function worldPane(pane: SnapshotPane, workspaceId: string): WorldPane {
@@ -46,6 +55,7 @@ function worldPane(pane: SnapshotPane, workspaceId: string): WorldPane {
         status: pane.status,
         agentKind: pane.agentKind,
         agentSessionId: pane.agentSessionID,
+        agentStartedAt: pane.agentStartedAt ?? null,
     };
 }
 
@@ -70,6 +80,7 @@ export function worldFromSnapshot(state: Snapshot['state']): KelpiWorld {
                 { childOrder: group.childOrder, isCollapsed: group.isCollapsed },
             ]),
         ),
+        activity: {},
     };
 }
 
@@ -108,7 +119,7 @@ export function visibleWorkspaceOrder(world: KelpiWorld): string[] {
 /** Returns a new world with the changes applied in order. Change kinds it does not read are ignored. */
 export function applyChanges(world: KelpiWorld, changes: readonly unknown[]): KelpiWorld {
     let { workspaces, panes } = world;
-    let { topLevelOrder, groups } = world;
+    let { topLevelOrder, groups, activity } = world;
     for (const change of changes as StateChange[]) {
         switch (change.kind) {
             case 'pane-upserted': {
@@ -129,9 +140,13 @@ export function applyChanges(world: KelpiWorld, changes: readonly unknown[]): Ke
                               status: change.status,
                               agentSessionId: change.agentSessionID,
                               agentKind: change.agentKind,
+                              agentStartedAt: change.agentStartedAt ?? null,
                           }
                         : pane,
                 );
+                if (change.status !== 'waitingForInput') {
+                    activity = wake(activity, change.paneID);
+                }
                 break;
             case 'workspace-upserted': {
                 const { name, color, muted } = change.workspace;
@@ -170,5 +185,5 @@ export function applyChanges(world: KelpiWorld, changes: readonly unknown[]): Ke
                 break;
         }
     }
-    return { workspaces, panes, topLevelOrder, groups };
+    return { workspaces, panes, topLevelOrder, groups, activity };
 }

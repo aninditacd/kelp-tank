@@ -1,4 +1,5 @@
 import { describe, expectTypeOf, it } from 'vitest';
+import type { Activity } from '../src/activity';
 import type { WorkspaceColor } from '../src/kelpi-api';
 import type {
     SessionRole,
@@ -29,6 +30,9 @@ describe('TankState', () => {
             role: SessionRole;
             state: SessionState;
             babies: string[];
+            activity: Activity | null;
+            dozing: boolean;
+            workingSince: number | null;
         }>();
         expectTypeOf<TankState>().toEqualTypeOf<{
             workspaces: TankWorkspace[];

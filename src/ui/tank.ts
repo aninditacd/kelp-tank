@@ -23,7 +23,9 @@ import {
     WebGLRenderer,
 } from 'three';
 import { ledgeLabel } from '../shortcuts';
-import type { SessionRole, TankState } from '../tank-state';
+import type { Activity } from '../activity';
+import type { SessionRole, TankSession, TankState } from '../tank-state';
+import { makeMoodFx, makePropFx, type MoodFx, type PropFx } from './activity-fx';
 import {
     bodyChanged,
     decideGoals,
@@ -32,9 +34,12 @@ import {
     babyPoint,
     followPoint,
     glassSpot,
+    heldActivity,
     isGone,
+    isTired,
     type Goal,
     nudgePoint,
+    restPoint,
     speedFor,
     swimPoint,
     updatePose,
@@ -42,7 +47,7 @@ import {
     type Vec3,
 } from './behaviour';
 import { kelpTint, workspaceHex } from './colors';
-import { type Creature, makeBaby, makeCreature, NOSE } from './creatures';
+import { type Creature, makeBaby, makeCreature, NOSE, setLids } from './creatures';
 import { type AlertFx, makeAlertFx, makeRipple, makeTickFx, type TickFx } from './effects';
 import { DEPTH, layoutTank, PX_PER_UNIT, type TankLayout } from './layout';
 import { entranceFor, openingView, type TankMemory, type TankSnapshot } from './memory';
@@ -164,6 +169,17 @@ interface Swimmer extends Creature {
     /** The update creature's tick, and the clock time its update began (null until it steps). */
     tick: TickFx;
     updateT: number | null;
+    /** The session as last decided: its activity, doze and turn start drive the looks below. */
+    session: TankSession;
+    /** The prop on show, held briefly after its tool finishes (`heldActivity`). */
+    shown: { activity: Activity | null; until: number };
+    prop: PropFx | null;
+    propAmount: number;
+    mood: MoodFx;
+    tiredAmount: number;
+    dozeAmount: number;
+    /** Where a dozing creature sleeps, fixed when it nods off; null while awake. */
+    rest: Vec3 | null;
 }
 
 /** A baby fish: one background agent of a session, swimming beside the session's creature. */
@@ -495,6 +511,14 @@ export function createTank(canvas: HTMLCanvasElement, options: TankOptions): Tan
                     tick: makeTickFx(),
                     // A page that opens on an update shows it already rested, with no tick.
                     updateT: !settled && goal.kind === 'update' ? -Infinity : null,
+                    session: s,
+                    shown: { activity: null, until: 0 },
+                    prop: null,
+                    propAmount: 0,
+                    mood: makeMoodFx(),
+                    tiredAmount: 0,
+                    dozeAmount: 0,
+                    rest: null,
                 };
                 const entrance = restoreAt
                     ? null
@@ -529,13 +553,16 @@ export function createTank(canvas: HTMLCanvasElement, options: TankOptions): Tan
                     c.goal = { kind: 'swim' };
                 }
                 c.yaw = c.pos.x > 0 ? Math.PI : 0;
-                scene.add(c.group, c.fx.bubble, c.fx.glow, c.tick);
+                scene.add(c.group, c.fx.bubble, c.fx.glow, c.tick, c.mood.group);
                 swimmers.set(s.paneId, c);
             }
             if (box) {
                 c.box = box;
                 c.workspaceId = s.workspaceId;
+                // A ledge appearing or leaving moves this one, so a sleeper finds its new floor.
+                c.rest = null;
             }
+            c.session = s;
             if (c.leaving && goal.kind !== 'leave') c.leaving = false;
             if (goal.kind !== c.goal.kind) {
                 c.tapping = false;
@@ -640,6 +667,8 @@ export function createTank(canvas: HTMLCanvasElement, options: TankOptions): Tan
         for (const c of swimmers.values()) {
             const box = boxFor(c.workspaceId);
             if (box) c.box = box;
+            // Ledges move on a re-layout, so a sleeper finds its new floor.
+            c.rest = null;
             if (c.leaving) continue;
             const limit = layout.width / 2 - 0.05;
             c.pos.x = Math.max(-limit, Math.min(limit, c.pos.x));
@@ -653,7 +682,34 @@ export function createTank(canvas: HTMLCanvasElement, options: TankOptions): Tan
         c.fx.bubble.material.dispose();
         c.fx.glow.material.dispose();
         c.tick.material.dispose();
+        c.prop?.dispose();
+        c.mood.dispose();
         swimmers.delete(c.paneId);
+    }
+
+    /** The prop for what the creature is doing, its sweat drop and its "z"s. */
+    function stepLooks(c: Swimmer, t: number, dt: number) {
+        const anchor = { pos: c.pos, scale: c.scale, top: c.top };
+        c.shown = heldActivity(c.shown, c.leaving ? null : c.session.activity, t);
+        const want = c.shown.activity;
+        if (c.prop && c.prop.activity !== want) {
+            // A new tool swaps the prop at once; a finished one shrinks away first.
+            if (want !== null || c.propAmount < 0.02) {
+                c.prop.dispose();
+                c.prop = null;
+                c.propAmount = 0;
+            }
+        }
+        if (!c.prop && want !== null) {
+            c.prop = makePropFx(want);
+            scene.add(c.prop.group);
+        }
+        if (c.prop) {
+            const on = c.prop.activity === want ? 1 : 0;
+            c.propAmount += (on - c.propAmount) * (1 - Math.exp(-dt * 8));
+            c.prop.step(anchor, t, dt, c.propAmount);
+        }
+        c.mood.step(anchor, t, dt, c.tiredAmount, c.dozeAmount);
     }
 
     function step(c: Swimmer, dt: number, t: number) {
@@ -666,12 +722,22 @@ export function createTank(canvas: HTMLCanvasElement, options: TankOptions): Tan
         const pose = goal.kind === 'update' ? updatePose(t - (c.updateT ??= t)) : null;
         const toGlass = goal.kind === 'glass' || pose?.at === 'glass';
         const drifting = goal.kind === 'drift' || pose?.at === 'drift';
-        let speed = speedFor(c.role, pose?.at === 'drift' ? { kind: 'drift' } : goal);
+        // A dozing creature sleeps on its own ledge; a tired one swims slower with its nose down.
+        const dozing = c.session.dozing && !c.leaving;
+        const tired = !c.leaving && isTired(c.session, Date.now());
+        let speed = speedFor(c.role, pose?.at === 'drift' || dozing ? { kind: 'drift' } : goal);
+        if (tired) speed *= 0.5;
         const aim = (p: Vec3) => c.target.set(p.x, p.y, p.z);
+        if (!dozing) c.rest = null;
 
         if (c.leaving) {
             aim(exitPoint(c.pos, world));
             if (isGone(c.pos, world)) c.gone = true;
+        } else if (dozing) {
+            // It never taps in its sleep. A wants-you creature sleeps below its spot on the glass.
+            c.tapping = false;
+            c.rest ??= restPoint(c.box, margin, goal.kind === 'glass' && c.spot ? c.spot : c.pos);
+            aim(c.rest);
         } else if (toGlass && c.spot) {
             c.target.copy(c.spot);
             // Only a creature asking for the owner taps; an update just waits at the glass.
@@ -739,10 +805,14 @@ export function createTank(canvas: HTMLCanvasElement, options: TankOptions): Tan
         }
         speed = c.vel.length();
         c.group.position.copy(c.pos);
-        c.group.rotation.set(0, c.yaw, MathUtils.clamp(c.vel.y * 1.5, -0.5, 0.5));
+        c.tiredAmount += ((tired ? 1 : 0) - c.tiredAmount) * (1 - Math.exp(-dt * 3));
+        c.dozeAmount += ((dozing ? 1 : 0) - c.dozeAmount) * (1 - Math.exp(-dt * 3));
+        const droop = -0.22 * c.tiredAmount;
+        c.group.rotation.set(0, c.yaw, MathUtils.clamp(c.vel.y * 1.5, -0.5, 0.5) + droop);
 
         const excited = c.tapping ? 1.6 : 1;
-        const rate = (drifting ? 3 : 6 + speed * 18) * excited;
+        const sleepy = 1 - 0.4 * c.tiredAmount - 0.5 * c.dozeAmount;
+        const rate = (drifting || dozing ? 3 : 6 + speed * 18) * excited * sleepy;
         if (c.tail) c.tail.rotation.y = Math.sin(t * rate + c.phase) * 0.4;
         c.fins?.forEach((fin, i) => {
             fin.rotation.x = (i ? -1 : 1) * Math.sin(t * rate * 0.6 + c.phase) * 0.5;
@@ -757,6 +827,12 @@ export function createTank(canvas: HTMLCanvasElement, options: TankOptions): Tan
             });
             c.head.rotation.z = Math.sin(t * 1.3 + c.phase) * 0.08;
         }
+
+        // Half-shut eyes when tired, shut when dozing, and a blink now and then otherwise.
+        const shut = Math.max(c.dozeAmount, c.tiredAmount * 0.5);
+        const blink = shut < 0.5 && (t * 0.3 + c.phase) % 1 < 0.04 ? 1 : 0;
+        setLids(c, Math.max(shut, blink));
+        stepLooks(c, t, dt);
 
         // The "!" bubble and glow, for a wants-you creature that is asking Dita directly.
         const on = goal.kind === 'glass' && goal.alert && !c.leaving;

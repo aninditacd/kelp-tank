@@ -1,3 +1,4 @@
+import { activityForTool } from './activity';
 import { liveAgents, type AgentBook } from './agents';
 import { sidebarOrder, type KelpiWorld, type WorldPane } from './kelpi-world';
 import { FALLBACK_CHORDS, workspaceShortcuts } from './shortcuts';
@@ -48,6 +49,8 @@ function displayNameOf(pane: WorldPane): string {
  * that is waiting shows `update`, except a rail, which keeps relaying as before.
  * `babies` is the agent book from Kelp Tank's Claude hook and the time to judge it at; a session's
  * baby fish are its pane's live agents of its own session id. Null, as without the hook, gives none.
+ * `world.activity` gives a working session its `activity` and a waiting one its `dozing`
+ * (src/activity.ts); a rail never has either.
  */
 export function decideTank(
     world: KelpiWorld,
@@ -62,20 +65,32 @@ export function decideTank(
             const displayName = displayNameOf(pane);
             const role = roleForName(displayName);
             const state = stateOf(pane);
+            const shown =
+                state === 'wantsYou' && role !== 'rail' && quiet.has(pane.id) ? 'update' : state;
+            // Tools and dozes recorded under another session id belong to an older session.
+            const tracked = world.activity[pane.id];
+            const own = tracked?.sessionId === pane.agentSessionId ? tracked : undefined;
+            const newest = own?.tools.at(-1);
             return {
                 paneId: pane.id,
                 workspaceId: pane.workspaceId,
                 displayName,
                 role,
-                state:
-                    state === 'wantsYou' && role !== 'rail' && quiet.has(pane.id)
-                        ? 'update'
-                        : state,
+                state: shown,
                 relaysTo: null,
                 babies:
                     babies === null || pane.agentSessionId === null
                         ? []
                         : liveAgents(babies.book, pane.id, pane.agentSessionId, babies.now),
+                activity:
+                    shown === 'working' && role !== 'rail' && newest !== undefined
+                        ? activityForTool(newest)
+                        : null,
+                dozing:
+                    (shown === 'wantsYou' || shown === 'update') &&
+                    role !== 'rail' &&
+                    own?.dozing === true,
+                workingSince: shown === 'working' ? pane.agentStartedAt : null,
             };
         });
 
@@ -92,7 +107,15 @@ export function decideTank(
 
     const vanished = (previous?.sessions ?? [])
         .filter((old) => old.state !== 'closed' && !live.some((s) => s.paneId === old.paneId))
-        .map((old) => ({ ...old, state: 'closed' as const, relaysTo: null, babies: [] }));
+        .map((old) => ({
+            ...old,
+            state: 'closed' as const,
+            relaysTo: null,
+            babies: [],
+            activity: null,
+            dozing: false,
+            workingSince: null,
+        }));
 
     const ledges = new Set(sessions.filter((s) => s.state !== 'closed').map((s) => s.workspaceId));
     const shortcuts = workspaceShortcuts(world, chords);

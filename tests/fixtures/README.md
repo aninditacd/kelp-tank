@@ -119,6 +119,25 @@ It feeds the baby fish (`src/agents.ts`). Everything in it is real: the built pl
 
 The prompt told Claude not to wait for the background agent, but `claude -p` still waited before it exited. So the run has no session that ends with an agent still running. The test for that case replays the session end with the book from before the background agent's stop.
 
+# Tool activity run
+
+`tool-activity-run.jsonl` was captured on 16 Oct 2026 by Rail J, from Kelpi's private instance at Kelpi tag `v0.2.19`, with `kelpi plugin watch`. Line 1 is the snapshot (sequence 48). Only `state.changed`, `agent.event`, `dita.kelp-tank.hook` and `dita.kelp-tank.agents` lines are kept, up to sequence 171. The stream also carried 74 `daemon.system-stats` lines, 4 `daemon.notification`, 2 `daemon.attention-request` and 1 `daemon.reveal-pane`, which were left out whole. The home folder was scrubbed by exact string replacement to `/srv/demo/home`. No other line was altered.
+
+It feeds what a working creature is doing and the doze (`src/activity.ts`). The built plugin was installed in the instance, with three made-up sessions: `harbour-fish` and `lighthouse-fish` in workspace Harbour, and `lagoon-fish` in workspace Lagoon.
+
+**What was driven.** No real Claude ran. A real Claude Code session would write under the owner's own Claude folder, and `idle_prompt` fires only after a minute of waiting in an interactive session. So each session's status came from Kelpi's own hook command (`kelpi event session-start|start|stop|notification --agent claude`), run as that pane against the instance's socket, with Claude-shaped stdin and a made-up reply. Each tool call came from Kelp Tank's real hook script, `claude-hook/kelp-tank-hook.mjs`, fed Claude-shaped `PreToolUse`, `PostToolUse` or `PostToolUseFailure` JSON on stdin as the `harbour-fish` pane. The script ran the real `kelpi kelp-tank` verb, and the installed backend emitted every `dita.kelp-tank.hook` event, so the plugin heard exactly what a real hook call produces.
+
+| Sequence | What happened |
+| --- | --- |
+| 50-54 | The three sessions start. |
+| 61 | `lighthouse-fish` starts a turn and keeps working to the end. |
+| 100-112 | `harbour-fish` and `lagoon-fish` start turns; harbour starts `Read` (106); lagoon stops, waiting (112). |
+| 115-124 | Harbour finishes `Read`, then starts `Read` and `Bash` together (116, 117). `Bash` finishes first (121), then `Read` (124). |
+| 129 | Claude's `idle_prompt` for the waiting `lagoon-fish`. |
+| 131-151 | Harbour runs `Edit`, `WebFetch`, a `Bash` that fails (`PostToolUseFailure`, 145) and `Agent`. |
+| 157-164 | Harbour stops, waiting, then gets its own `idle_prompt`. |
+| 171 | `lagoon-fish` starts its next turn. |
+
 # Hook payloads
 
 `hook-payloads/` holds one real Claude Code 2.1.301 hook payload per event Kelp Tank's hook handles: `subagent-start.json`, `subagent-stop.json`, `pre-tool-use.json` and `post-tool-use.json`. They come from an earlier run on 16 Oct 2026, of the same kind as the one above, in which two subagents ran in the same private-instance pane. The tool calls are from inside a subagent, so they carry `agent_id`.

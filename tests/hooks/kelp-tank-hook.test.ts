@@ -105,6 +105,24 @@ describe('the Kelp Tank Claude hook', { timeout: 30_000 }, () => {
         ]);
     });
 
+    it('a failed tool call is sent as PostToolUseFailure, so its prop goes away', async () => {
+        const sent: Record<string, unknown> = {
+            ...payload('post-tool-use'),
+            hook_event_name: 'PostToolUseFailure',
+        };
+        delete sent.agent_id;
+        const run = runHook(JSON.stringify(sent), { KELPI_PANE_ID: PANE });
+        expect(await calls(run.fake)).toEqual([
+            `pane=${PANE}`,
+            'kelp-tank',
+            'PostToolUseFailure',
+            '--session',
+            sent.session_id,
+            '--tool',
+            'Bash',
+        ]);
+    });
+
     it('an id with unexpected characters is left out', async () => {
         const sent = {
             ...payload('pre-tool-use'),
