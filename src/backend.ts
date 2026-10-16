@@ -1,5 +1,6 @@
+import { recordAgentEvent, recordTool, type ActivityAnswer } from './activity';
 import { applyHook, EMPTY_BOOK, parseHookArgv, readBook, type AgentBook } from './agents';
-import type { BackendApi, CliInvocation, CliResult } from './kelpi-api';
+import type { BackendApi, CliInvocation, CliResult, PluginEvent } from './kelpi-api';
 import { quietAfter } from './quiet';
 
 /** Where the agent book is saved, so a restarted backend keeps its baby fish. */
@@ -15,8 +16,21 @@ export function activate(api: BackendApi) {
     // this set. It lives in memory only: the reply text is never stored, logged or sent anywhere,
     // and a restarted backend starts empty, so every waiting fish glows again - the safe side.
     let quiet: ReadonlySet<string> = new Set();
-    const offEvents = api.agents.onEvent((event) => {
+    // Each pane's running tools and doze (src/activity.ts), for the same reason: a rebuilt page
+    // missed the events. Memory only, like the quiet set. `epoch` and `sequence` name the latest
+    // event applied, so a new page skips the buffered events this answer already covers.
+    let activity: ActivityAnswer = { epoch: null, sequence: -1, panes: {} };
+    const covered = (panes: ActivityAnswer['panes'], event: PluginEvent): ActivityAnswer => ({
+        epoch: event.epoch,
+        sequence:
+            event.epoch === activity.epoch
+                ? Math.max(activity.sequence, event.sequence)
+                : event.sequence,
+        panes,
+    });
+    const offEvents = api.agents.onEvent((event, raw) => {
         quiet = quietAfter(quiet, event);
+        activity = covered(recordAgentEvent(activity.panes, event.sessionID ?? null, event), raw);
     });
     const offSummary = api.commands.register('dita.kelp-tank.summary', async () => ({
         workspaces: await api.workspaces.list(),
@@ -25,6 +39,7 @@ export function activate(api: BackendApi) {
     const offQuiet = api.commands.register('dita.kelp-tank.quiet', async () => ({
         panes: [...quiet],
     }));
+    const offActivity = api.commands.register('dita.kelp-tank.activity', async () => activity);
 
     // The agent book: every live background agent, by pane. It is read from storage once, on the
     // first call that needs it, and kept in memory after that; an unreadable save starts empty.
@@ -49,17 +64,22 @@ export function activate(api: BackendApi) {
         const now = Date.now();
         const next = applyHook(book, call, paneId, now);
         book = next.book;
-        void api
-            .emit('hook', {
-                paneID: paneId,
-                workspaceID: context.workspaceID ?? null,
-                event: call.event,
-                sessionId: call.sessionId,
-                agentId: call.agentId,
-                toolName: call.toolName,
-                at: now,
-            })
-            .catch(() => {});
+        const data = {
+            paneID: paneId,
+            workspaceID: context.workspaceID ?? null,
+            event: call.event,
+            sessionId: call.sessionId,
+            agentId: call.agentId,
+            toolName: call.toolName,
+            at: now,
+        };
+        // Recorded once the event is sent, so the answer's sequence always covers its change.
+        void api.emit('hook', data).then(
+            (sent) => {
+                activity = covered(recordTool(activity.panes, data), sent);
+            },
+            () => {},
+        );
         if (next.changed) {
             await api.storage.set(BOOK_KEY, book).catch(() => {});
             void api.emit('agents', book).catch(() => {});
@@ -75,6 +95,7 @@ export function activate(api: BackendApi) {
         offEvents();
         offSummary();
         offQuiet();
+        offActivity();
         offHook();
         offBook();
     };

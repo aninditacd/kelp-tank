@@ -1,5 +1,13 @@
 import { describe, expect, it } from 'vitest';
-import { activityForTool, applyAgentEvent, applyToolEvent } from '../src/activity';
+import {
+    activityForTool,
+    applyAgentEvent,
+    applyToolEvent,
+    readActivity,
+    recordAgentEvent,
+    recordTool,
+    seedActivity,
+} from '../src/activity';
 import type { AgentHookEvent } from '../src/kelpi-api';
 import { applyChanges, type KelpiWorld, type WorldPane } from '../src/kelpi-world';
 
@@ -233,5 +241,68 @@ describe('applyAgentEvent', () => {
     it('an event for a pane the world does not hold changes nothing', () => {
         const w = running();
         expect(applyAgentEvent(w, agentEvent({ type: 'stop', paneID: 'P9' }))).toBe(w);
+    });
+});
+
+describe('recordTool and recordAgentEvent', () => {
+    it('recordTool records a parent tool with no world', () => {
+        const started = recordTool({}, hook('PreToolUse', 'Bash'));
+        expect(started).toEqual({ [PANE]: { sessionId: SESSION, tools: ['Bash'], dozing: false } });
+        expect(recordTool(started, hook('PostToolUse', 'Bash'))[PANE].tools).toEqual([]);
+        // A subagent's call and malformed data change nothing.
+        expect(recordTool(started, hook('PreToolUse', 'Read', { agentId: 'a1' }))).toBe(started);
+        expect(recordTool(started, null)).toBe(started);
+    });
+
+    it('recordAgentEvent dozes on idle_prompt and a start wakes it', () => {
+        const idle = agentEvent({ type: 'notification', notificationType: 'idle_prompt' });
+        const dozed = recordAgentEvent({}, SESSION, idle);
+        expect(dozed[PANE]).toEqual({ sessionId: SESSION, tools: [], dozing: true });
+        const woke = recordAgentEvent(
+            dozed,
+            SESSION,
+            agentEvent({ type: 'start', status: 'running' }),
+        );
+        expect(woke[PANE].dozing).toBe(false);
+    });
+});
+
+describe('readActivity and seedActivity', () => {
+    const entry = { sessionId: SESSION, tools: ['Bash'], dozing: true };
+
+    it('readActivity keeps well-formed entries and drops the rest', () => {
+        expect(
+            readActivity({
+                epoch: 'e1',
+                sequence: 12,
+                panes: {
+                    [PANE]: entry,
+                    P2: { sessionId: null, tools: [], dozing: false },
+                    P3: { sessionId: SESSION, tools: [7], dozing: false },
+                    P4: { sessionId: SESSION, tools: [], dozing: 'yes' },
+                    P5: null,
+                },
+            }),
+        ).toEqual({
+            epoch: 'e1',
+            sequence: 12,
+            panes: { [PANE]: entry, P2: { sessionId: null, tools: [], dozing: false } },
+        });
+        const empty = { epoch: null, sequence: -1, panes: {} };
+        for (const answer of [undefined, null, 'x', { epoch: 3, sequence: 1, panes: {} }]) {
+            expect(readActivity(answer)).toEqual(empty);
+        }
+        expect(readActivity({ epoch: 'e1', sequence: '9', panes: {} })).toEqual(empty);
+        expect(readActivity({ epoch: 'e1', sequence: 9, panes: [] })).toEqual(empty);
+    });
+
+    it('seedActivity clears the doze of a pane that is no longer waiting', () => {
+        const waiting = seedActivity(world([pane({ status: 'waitingForInput' })]), {
+            [PANE]: entry,
+        });
+        expect(waiting.activity[PANE]).toEqual(entry);
+        const focused = seedActivity(world([pane({ status: 'idle' })]), { [PANE]: entry });
+        expect(focused.activity[PANE]).toEqual({ ...entry, dozing: false });
+        expect(focused.panes).toEqual([pane({ status: 'idle' })]);
     });
 });

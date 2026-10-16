@@ -21,8 +21,8 @@ export interface KelpiWorld {
     groups: Record<string, { childOrder: string[]; isCollapsed: boolean }>;
     /**
      * Per pane: the tools its Claude session is running and whether it dozes, from Kelp Tank's
-     * Claude hook and Kelpi's agent events (src/activity.ts). Empty after every snapshot, since
-     * events from before one cannot be trusted.
+     * Claude hook and Kelpi's agent events (src/activity.ts). Empty from `worldFromSnapshot`; the
+     * live tank seeds it from the backend's record after every snapshot (`seedActivity`).
      */
     activity: Record<string, PaneActivity>;
 }

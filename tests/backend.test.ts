@@ -1,18 +1,26 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { activate } from '../src/backend';
 import type { AgentBook } from '../src/agents';
-import type { AgentHookEvent, BackendApi, WorkspaceInfo } from '../src/kelpi-api';
+import type { AgentHookEvent, BackendApi, PluginEvent, WorkspaceInfo } from '../src/kelpi-api';
 
 const REPLY = 'Tide table done. Kestrel-marker-7. \nAwaiting you: 0 - nothing';
 
 function fakeApi(workspaces: WorkspaceInfo[] = [], stored = new Map<string, unknown>()) {
     const handlers = new Map<string, (args?: unknown, context?: unknown) => Promise<unknown>>();
-    const listeners: ((event: AgentHookEvent) => void)[] = [];
+    const listeners: ((event: AgentHookEvent, raw: PluginEvent) => void)[] = [];
+    // Kelpi numbers every event in one sequence, Kelp Tank's own emits included.
+    let sequence = 100;
     const storageSet = vi.fn(async (key: string, value: unknown) => {
         stored.set(key, structuredClone(value));
     });
     const storageGet = vi.fn(async (key: string) => stored.get(key));
-    const emit = vi.fn(async (name: string, data?: unknown) => ({ name, data }));
+    const emit = vi.fn(async (name: string, data?: unknown) => ({
+        epoch: 'e1',
+        sequence: ++sequence,
+        name: `dita.kelp-tank.${name}`,
+        data,
+        pluginID: 'dita.kelp-tank',
+    }));
     const api = {
         commands: {
             register: (id: string, handler: () => Promise<unknown>) => {
@@ -22,7 +30,7 @@ function fakeApi(workspaces: WorkspaceInfo[] = [], stored = new Map<string, unkn
         },
         workspaces: { list: async () => workspaces },
         agents: {
-            onEvent: (listener: (event: AgentHookEvent) => void) => {
+            onEvent: (listener: (event: AgentHookEvent, raw: PluginEvent) => void) => {
                 listeners.push(listener);
                 return () => listeners.splice(listeners.indexOf(listener), 1);
             },
@@ -30,17 +38,18 @@ function fakeApi(workspaces: WorkspaceInfo[] = [], stored = new Map<string, unkn
         storage: { get: storageGet, set: storageSet },
         emit,
     } as unknown as BackendApi;
-    const hear = (event: Partial<AgentHookEvent>) =>
-        listeners.forEach((listener) =>
-            listener({
-                type: 'stop',
-                paneID: 'p1',
-                workspaceID: 'w',
-                agent: 'claude',
-                status: 'waitingForInput',
-                ...event,
-            }),
-        );
+    const hear = (event: Partial<AgentHookEvent>) => {
+        const data: AgentHookEvent = {
+            type: 'stop',
+            paneID: 'p1',
+            workspaceID: 'w',
+            agent: 'claude',
+            status: 'waitingForInput',
+            ...event,
+        };
+        const raw = { epoch: 'e1', sequence: ++sequence, name: 'agent.event', data };
+        listeners.forEach((listener) => listener(data, raw));
+    };
     return { api, handlers, hear, storageSet, storageGet, emit, stored };
 }
 
@@ -211,5 +220,111 @@ describe('the kelp-tank verb', () => {
         expect(await call(handlers, START)).toEqual({});
         const book = stored.get('babyAgents') as { panes: AgentBook['panes'] };
         expect(Object.keys(book.panes.p1.agents)).toEqual(['a1']);
+    });
+});
+
+describe('the activity command', () => {
+    const PANE = { paneID: 'p1', workspaceID: 'w1', daemonID: 'd' };
+    const tool = (event: string, name: string) => ({
+        argv: [event, '--session', 's1', '--tool', name],
+        cwd: '/srv/demo',
+        isTTY: false,
+        json: false,
+    });
+    const settle = () => new Promise((resolve) => setImmediate(resolve));
+    const activity = (handlers: ReturnType<typeof fakeApi>['handlers']) =>
+        handlers.get('dita.kelp-tank.activity')!() as Promise<{
+            epoch: string | null;
+            sequence: number;
+            panes: Record<string, unknown>;
+        }>;
+
+    it('the activity command answers a running tool after its hook call', async () => {
+        const { api, handlers } = fakeApi();
+        activate(api);
+        expect(await activity(handlers)).toEqual({ epoch: null, sequence: -1, panes: {} });
+        await handlers.get('dita.kelp-tank.hook')!(tool('PreToolUse', 'Bash'), PANE);
+        await settle();
+        expect((await activity(handlers)).panes).toEqual({
+            p1: { sessionId: 's1', tools: ['Bash'], dozing: false },
+        });
+        await handlers.get('dita.kelp-tank.hook')!(tool('PostToolUse', 'Bash'), PANE);
+        await settle();
+        expect((await activity(handlers)).panes).toEqual({
+            p1: { sessionId: 's1', tools: [], dozing: false },
+        });
+    });
+
+    it('the activity command answers a doze after idle_prompt, and a start wakes it', async () => {
+        const { api, handlers, hear } = fakeApi();
+        activate(api);
+        hear({ type: 'notification', notificationType: 'idle_prompt', sessionID: 's1' });
+        expect((await activity(handlers)).panes).toEqual({
+            p1: { sessionId: 's1', tools: [], dozing: true },
+        });
+        hear({ type: 'start', status: 'running', sessionID: 's1' });
+        expect((await activity(handlers)).panes).toEqual({
+            p1: { sessionId: 's1', tools: [], dozing: false },
+        });
+    });
+
+    it("the activity command's sequence covers the latest event it applied", async () => {
+        const { api, handlers, hear, emit } = fakeApi();
+        activate(api);
+        hear({ type: 'notification', notificationType: 'idle_prompt', sessionID: 's1' });
+        expect(await activity(handlers)).toMatchObject({ epoch: 'e1', sequence: 101 });
+        await handlers.get('dita.kelp-tank.hook')!(tool('PreToolUse', 'Read'), PANE);
+        await settle();
+        const sent = (await emit.mock.results[0].value) as PluginEvent;
+        expect(sent.sequence).toBe(102);
+        expect(await activity(handlers)).toMatchObject({ epoch: 'e1', sequence: 102 });
+    });
+
+    it('a hook event sent late keeps the higher sequence it already covers', async () => {
+        const { api, handlers, hear, emit } = fakeApi();
+        activate(api);
+        let send: (event: PluginEvent) => void = () => {};
+        emit.mockImplementationOnce(
+            (name: string, data?: unknown) =>
+                new Promise((resolve) => {
+                    send = () =>
+                        resolve({
+                            epoch: 'e1',
+                            sequence: 100,
+                            name,
+                            data,
+                            pluginID: 'dita.kelp-tank',
+                        });
+                }) as never,
+        );
+        await handlers.get('dita.kelp-tank.hook')!(tool('PreToolUse', 'Bash'), PANE);
+        // Kelpi numbered the hook event 100, but an agent event (101) reached the backend first.
+        hear({
+            type: 'notification',
+            notificationType: 'idle_prompt',
+            sessionID: 's2',
+            paneID: 'p2',
+        });
+        send({} as PluginEvent);
+        await settle();
+        const answer = await activity(handlers);
+        expect(answer.sequence).toBe(101);
+        expect(answer.panes.p1).toEqual({ sessionId: 's1', tools: ['Bash'], dozing: false });
+    });
+
+    it('the backend never stores activity', async () => {
+        const { api, handlers, hear, storageSet } = fakeApi();
+        activate(api);
+        hear({ type: 'notification', notificationType: 'idle_prompt', sessionID: 's1' });
+        await handlers.get('dita.kelp-tank.hook')!(tool('PreToolUse', 'Bash'), PANE);
+        await handlers.get('dita.kelp-tank.hook')!(
+            {
+                ...tool('SubagentStart', ''),
+                argv: ['SubagentStart', '--session', 's1', '--agent', 'a1'],
+            },
+            PANE,
+        );
+        await settle();
+        expect(storageSet.mock.calls.map(([key]) => key)).toEqual(['babyAgents']);
     });
 });

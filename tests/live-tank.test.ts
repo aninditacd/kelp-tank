@@ -22,7 +22,8 @@ import { activityEvents, activityPaneId, activitySnapshot } from './support/tool
 /**
  * `seed` is what the backend's quiet command answers: pane ids, or an Error to fail with.
  * `holdSeed` leaves each answer pending until the test calls `answerSeed`. `book` is what the
- * backend's agent book command answers, and `holdBook` holds it until `answerBook`.
+ * backend's agent book command answers, and `holdBook` holds it until `answerBook`. `activity`
+ * is what the backend's activity command answers, and `holdActivity` holds it until `answerActivity`.
  */
 function fakeKelpi(
     options: {
@@ -30,6 +31,8 @@ function fakeKelpi(
         holdSeed?: boolean;
         book?: AgentBook | Error;
         holdBook?: boolean;
+        activity?: unknown;
+        holdActivity?: boolean;
     } = {},
 ) {
     const listeners: ((event: PluginEvent) => void)[] = [];
@@ -43,7 +46,15 @@ function fakeKelpi(
     const errors: Error[] = [];
     const seeds: { resolve(): void }[] = [];
     const books: { resolve(): void }[] = [];
+    const activities: { resolve(): void }[] = [];
     const execute = vi.fn(async (id: string) => {
+        if (id === 'dita.kelp-tank.activity') {
+            if (options.holdActivity) {
+                await new Promise<void>((resolve) => activities.push({ resolve }));
+            }
+            if (options.activity instanceof Error) throw options.activity;
+            return options.activity;
+        }
         if (id === 'dita.kelp-tank.agent-book') {
             if (options.holdBook) await new Promise<void>((resolve) => books.push({ resolve }));
             if (options.book instanceof Error) throw options.book;
@@ -97,6 +108,10 @@ function fakeKelpi(
         execute,
         answerBook: async () => {
             books.shift()!.resolve();
+            await new Promise((resolve) => setImmediate(resolve));
+        },
+        answerActivity: async () => {
+            activities.shift()!.resolve();
             await new Promise((resolve) => setImmediate(resolve));
         },
         answerSeed: async () => {
@@ -689,6 +704,177 @@ describe('the live tank', () => {
             expect(lighthouse.state).toBe('working');
             expect(lighthouse.workingSince).toBeGreaterThan(1_700_000_000_000);
             expect(lagoon.workingSince).toBeNull();
+        });
+    });
+    describe('a rebuilt page', () => {
+        // A page rebuilt mid-run, by a workspace switch: harbour-fish is running a Bash and
+        // lagoon-fish is waiting and dozing. Session ids are the recorded run's.
+        const HARBOUR = activityPaneId('harbour-fish');
+        const LAGOON = activityPaneId('lagoon-fish');
+        const HARBOUR_SESSION = '7a1c2e30-0001-4c4e-9d91-0000000000a1';
+        const LAGOON_SESSION = '7a1c2e30-0003-4c4e-9d91-0000000000c3';
+        const STARTED = 1_792_121_000_000;
+        const epoch = activitySnapshot.epoch;
+        function rebuilt(
+            lagoonStatus: 'waitingForInput' | 'idle' = 'waitingForInput',
+            titles: { harbour?: string; lagoon?: string } = {},
+        ): Snapshot {
+            const fresh = structuredClone(activitySnapshot);
+            fresh.sequence = 129;
+            for (const p of fresh.state.workspaces.flatMap((w) => w.panes)) {
+                if (p.id === HARBOUR) {
+                    Object.assign(p, {
+                        status: 'running',
+                        agentKind: 'claude',
+                        agentSessionID: HARBOUR_SESSION,
+                        agentStartedAt: STARTED,
+                        title: titles.harbour ?? null,
+                    });
+                }
+                if (p.id === LAGOON) {
+                    Object.assign(p, {
+                        status: lagoonStatus,
+                        agentKind: 'claude',
+                        agentSessionID: LAGOON_SESSION,
+                        title: titles.lagoon ?? null,
+                    });
+                }
+            }
+            return fresh;
+        }
+        const answer = (tools: string[], sequence = 129, answerEpoch: string = epoch) => ({
+            epoch: answerEpoch,
+            sequence,
+            panes: {
+                [HARBOUR]: { sessionId: HARBOUR_SESSION, tools, dozing: false },
+                [LAGOON]: { sessionId: LAGOON_SESSION, tools: [], dozing: true },
+            },
+        });
+        const hookAt = (sequence: number, event: string, toolName: string): PluginEvent => ({
+            epoch,
+            sequence,
+            name: 'dita.kelp-tank.hook',
+            pluginID: 'dita.kelp-tank',
+            data: {
+                paneID: HARBOUR,
+                workspaceID: workspaceOf(HARBOUR),
+                event,
+                sessionId: HARBOUR_SESSION,
+                agentId: null,
+                toolName,
+                at: STARTED + sequence,
+            },
+        });
+        function workspaceOf(pane: string): string {
+            return activitySnapshot.state.workspaces.find((w) =>
+                w.panes.some((p) => p.id === pane),
+            )!.id;
+        }
+        const of = (fake: ReturnType<typeof fakeKelpi>, pane: string) =>
+            fake.states.at(-1)!.sessions.find((s) => s.paneId === pane)!;
+
+        it('a new page shows a dozing creature asleep from its first state', async () => {
+            const fake = fakeKelpi({ activity: answer(['Bash']) });
+            await fake.resolveSnapshot(rebuilt());
+            expect(fake.states).toHaveLength(1);
+            expect(of(fake, LAGOON)).toMatchObject({ state: 'wantsYou', dozing: true });
+        });
+
+        it("a new page shows a running tool's prop from its first state until it finishes", async () => {
+            const fake = fakeKelpi({ activity: answer(['Bash']) });
+            await fake.resolveSnapshot(rebuilt());
+            expect(fake.states).toHaveLength(1);
+            expect(of(fake, HARBOUR)).toMatchObject({
+                state: 'working',
+                activity: 'command',
+                workingSince: STARTED,
+            });
+            fake.deliver(hookAt(130, 'PostToolUse', 'Bash'));
+            expect(of(fake, HARBOUR).activity).toBeNull();
+        });
+
+        it('an event the backend already applied is not applied twice', async () => {
+            const fake = fakeKelpi({ activity: answer(['Bash', 'Read'], 130), holdActivity: true });
+            await fake.resolveSnapshot(rebuilt());
+            fake.deliver(hookAt(130, 'PreToolUse', 'Read'));
+            await fake.answerActivity();
+            expect(of(fake, HARBOUR).activity).toBe('read');
+            fake.deliver(hookAt(131, 'PostToolUse', 'Read'));
+            expect(of(fake, HARBOUR).activity).toBe('command');
+        });
+
+        it('an agent event the backend already applied does not clear a newer tool', async () => {
+            const fake = fakeKelpi({ activity: answer(['Read'], 131), holdActivity: true });
+            await fake.resolveSnapshot(rebuilt());
+            fake.deliver({
+                epoch,
+                sequence: 130,
+                name: 'agent.event',
+                data: {
+                    type: 'stop',
+                    paneID: HARBOUR,
+                    workspaceID: workspaceOf(HARBOUR),
+                    agent: 'claude',
+                    sessionID: HARBOUR_SESSION,
+                    status: 'waitingForInput',
+                },
+            });
+            fake.deliver(hookAt(131, 'PreToolUse', 'Read'));
+            await fake.answerActivity();
+            expect(of(fake, HARBOUR).activity).toBe('read');
+        });
+
+        it('an answer from another epoch covers no events', async () => {
+            const fake = fakeKelpi({
+                activity: answer(['Bash'], 999, 'an-older-epoch'),
+                holdActivity: true,
+            });
+            await fake.resolveSnapshot(rebuilt());
+            fake.deliver(hookAt(130, 'PreToolUse', 'Read'));
+            await fake.answerActivity();
+            expect(of(fake, HARBOUR).activity).toBe('read');
+        });
+
+        it('a sleeper focused while no page was open shows awake', async () => {
+            const fake = fakeKelpi({ activity: answer([]) });
+            await fake.resolveSnapshot(rebuilt('idle'));
+            expect(of(fake, LAGOON)).toMatchObject({ state: 'idle', dozing: false });
+            fake.deliver({
+                epoch,
+                sequence: 130,
+                name: 'state.changed',
+                data: [
+                    {
+                        kind: 'agent-status-changed',
+                        workspaceID: workspaceOf(LAGOON),
+                        paneID: LAGOON,
+                        status: 'waitingForInput',
+                        agentSessionID: LAGOON_SESSION,
+                        agentKind: 'claude',
+                        agentStartedAt: null,
+                    },
+                ],
+            });
+            expect(of(fake, LAGOON)).toMatchObject({ state: 'wantsYou', dozing: false });
+        });
+
+        it('a failed or silent activity answer still draws the tank with no error', async () => {
+            for (const activity of [new Error('backend gone'), 'garbage', undefined]) {
+                const fake = fakeKelpi({ activity });
+                await fake.resolveSnapshot(rebuilt());
+                expect(of(fake, LAGOON)).toMatchObject({ state: 'wantsYou', dozing: false });
+                expect(of(fake, HARBOUR)).toMatchObject({ state: 'working', activity: null });
+                expect(fake.errors).toEqual([]);
+            }
+        });
+
+        it('a rail gets no prop or doze from the seed', async () => {
+            const fake = fakeKelpi({ activity: answer(['Bash']) });
+            await fake.resolveSnapshot(
+                rebuilt('waitingForInput', { harbour: '✳ demo-rail-y', lagoon: '✳ demo-rail-x' }),
+            );
+            expect(of(fake, HARBOUR)).toMatchObject({ role: 'rail', activity: null });
+            expect(of(fake, LAGOON)).toMatchObject({ role: 'rail', dozing: false });
         });
     });
 });
