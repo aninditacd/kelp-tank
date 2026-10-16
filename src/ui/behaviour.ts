@@ -264,3 +264,17 @@ export function heldActivity(
     if (shown.activity === null || t < shown.until) return shown;
     return { activity: null, until: shown.until };
 }
+
+/**
+ * A creature tapping the front glass, at `cycle` (clock seconds times the tap rate, plus its
+ * phase). Each cycle has two taps; `bump` is how far the nose pushes forward (0 to 1), `key`
+ * names the tap, and `ripple` is true from that tap's peak to its end.
+ */
+export function glassTap(cycle: number): { bump: number; key: number; ripple: boolean } {
+    const local = cycle % 1;
+    const window = local < 0.1 ? 0 : local >= 0.16 && local < 0.26 ? 1 : -1;
+    const into = window === 0 ? local : local - 0.16;
+    const bump = window >= 0 ? Math.sin((Math.PI * into) / 0.1) : 0;
+    // From the peak to the end is 67 ms, so a 30 fps tank that drops a frame still rings.
+    return { bump, key: Math.floor(cycle) * 2 + window, ripple: window >= 0 && into >= 0.05 };
+}

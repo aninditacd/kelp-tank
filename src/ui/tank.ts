@@ -34,6 +34,7 @@ import {
     babyPoint,
     followPoint,
     glassSpot,
+    glassTap,
     heldActivity,
     isGone,
     isTired,
@@ -51,6 +52,7 @@ import { type Creature, makeBaby, makeCreature, NOSE, setLids } from './creature
 import { type AlertFx, makeAlertFx, makeRipple, makeTickFx, type TickFx } from './effects';
 import { DEPTH, layoutTank, PX_PER_UNIT, type TankLayout } from './layout';
 import { entranceFor, openingView, type TankMemory, type TankSnapshot } from './memory';
+import { paceFrame } from './pacing';
 import { pickPaneId } from './pick';
 import { blob, toon } from './toon';
 import { tooltipText } from './tooltip';
@@ -443,6 +445,8 @@ export function createTank(canvas: HTMLCanvasElement, options: TankOptions): Tan
         renderer.setSize(width, height);
         build();
         sync();
+        // Resizing blanks the canvas, and the next frame may be one the frame cap skips.
+        renderer.render(scene, camera);
     }
 
     const boxFor = (workspaceId: string): Box | null => {
@@ -769,17 +773,8 @@ export function createTank(canvas: HTMLCanvasElement, options: TankOptions): Tan
         }
 
         if (c.tapping && c.spot) {
-            const cycle = (t + c.phase) * 0.75;
-            const local = cycle % 1;
-            const window = local < 0.1 ? 0 : local >= 0.16 && local < 0.26 ? 1 : -1;
-            const bump =
-                window === 0
-                    ? Math.sin((Math.PI * local) / 0.1)
-                    : window === 1
-                      ? Math.sin((Math.PI * (local - 0.16)) / 0.1)
-                      : 0;
-            const key = Math.floor(cycle) * 2 + window;
-            if (window >= 0 && key !== c.lastTap && bump > 0.9) {
+            const { bump, key, ripple } = glassTap((t + c.phase) * 0.75);
+            if (ripple && key !== c.lastTap) {
                 c.lastTap = key;
                 const ring = makeRipple();
                 ring.position.set(c.pos.x, c.pos.y, DEPTH / 2 + 0.002);
@@ -954,7 +949,16 @@ export function createTank(canvas: HTMLCanvasElement, options: TankOptions): Tan
     canvas.addEventListener('click', onClick);
 
     const clock = { last: performance.now() };
+    let lastDraw: number | null = null;
     function tick(now: number) {
+        // Every display frame still calls back, but the tank moves and draws about
+        // FRAME_RATE_CAP times a second (`pacing.ts`).
+        const pace = paceFrame(now, lastDraw);
+        lastDraw = pace.lastDraw;
+        if (!pace.draw) {
+            frame = requestAnimationFrame(tick);
+            return;
+        }
         const dt = Math.min((now - clock.last) / 1000, 0.05);
         clock.last = now;
         const t = now / 1000;
@@ -968,7 +972,8 @@ export function createTank(canvas: HTMLCanvasElement, options: TankOptions): Tan
         for (const r of rays) r.mesh.rotation.z = r.base + Math.sin(t * 0.3 + r.seed) * 0.05;
         for (const b of bubbles) {
             b.mesh.position.y += b.speed * dt;
-            b.mesh.position.x += Math.sin(t * 2 + b.seed) * 0.002;
+            // 0.12 a second is the 0.002 a frame this wobble was tuned at, 60 frames a second.
+            b.mesh.position.x += Math.sin(t * 2 + b.seed) * 0.12 * dt;
             if (b.mesh.position.y > layout.height - 0.05) {
                 b.mesh.position.y = 0.05;
                 b.mesh.position.x = rnd(b.x0, b.x1);
