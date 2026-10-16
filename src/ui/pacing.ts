@@ -1,14 +1,15 @@
 /**
- * The most frames a second the tank draws, whatever the display's refresh rate. Measured in
- * Kelpi's private instance on 16 Oct 2026: the tank drew every display frame (60 a second on a
- * 60 Hz screen, 120 on a 120 Hz one), and that roughly doubled Kelpi's CPU while it was visible.
+ * About how many frames a second the tank draws, whatever the display's refresh rate: exactly
+ * 30 on 60 and 120 Hz displays, 25 to 29 on 75 and 144 Hz ones, and up to 33 on 100 Hz ones.
+ * Measured in Kelpi's private instance on 16 Oct 2026: the tank drew every display frame, and
+ * that took Kelpi's CPU from 19% to about 30% of a core at 60 Hz, and from 34% to 61% at 120 Hz.
  */
 export const FRAME_RATE_CAP = 30;
 
 /**
- * A frame draws once this share of the cap's interval has passed. Frame times wander by a
- * fraction of a millisecond, so waiting for the whole interval would sometimes miss a frame on
- * a 60 Hz display and fall to 20 frames a second.
+ * A frame draws once this share of the cap's interval has passed, which is why a display can
+ * land slightly above the cap. Frame times wander by a fraction of a millisecond, so waiting for
+ * the whole interval would sometimes miss a frame on a 60 Hz display and fall to 20 a second.
  */
 const EARLY = 0.9;
 
