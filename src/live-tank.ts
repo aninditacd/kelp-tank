@@ -1,3 +1,4 @@
+import { applyAgentEvent, applyToolEvent } from './activity';
 import { dropExpired, EMPTY_BOOK, hasAgents, readBook, type AgentBook } from './agents';
 import { decideTank } from './decide-tank';
 import type { AgentHookEvent, PluginEvent, Snapshot, ViewApi } from './kelpi-api';
@@ -13,6 +14,8 @@ const QUIET_COMMAND = 'dita.kelp-tank.quiet';
 /** The backend command that answers the agent book, and the event that carries each change to it. */
 const BOOK_COMMAND = 'dita.kelp-tank.agent-book';
 const BOOK_EVENT = 'dita.kelp-tank.agents';
+/** The event the backend sends for each hook call: a tool or subagent starting or finishing. */
+const HOOK_EVENT = 'dita.kelp-tank.hook';
 /** How long a snapshot waits for the backend's answers before going on without them. */
 const QUIET_WAIT_MS = 3000;
 /** While any agent is in the book, the tank re-decides this often, so a timed-out baby fish leaves. */
@@ -34,6 +37,9 @@ const BABY_CHECK_MS = 30 * 1000;
  * (src/agents.ts). A snapshot asks the backend for it beside the quiet panes, and each
  * `dita.kelp-tank.agents` event replaces it as it arrives, whatever the snapshot is doing; the
  * higher `revision` wins. A failed request gives no baby fish and no error: the hook is optional.
+ *
+ * Each `dita.kelp-tank.hook` event, and Kelpi's own `agent.event`, updates what a creature is
+ * doing and whether it dozes (src/activity.ts). These live in the world, so a snapshot forgets them.
  */
 export function startLiveTank(
     kelpi: LiveKelpi,
@@ -92,7 +98,17 @@ export function startLiveTank(
         if (event.sequence <= sequence) return;
         sequence = event.sequence;
         if (event.name === 'agent.event' && event.pluginID === undefined) {
-            quiet = quietAfter(quiet, event.data as AgentHookEvent);
+            const data = event.data as AgentHookEvent;
+            quiet = quietAfter(quiet, data);
+            world = applyAgentEvent(world, data);
+            tank = decide(tank);
+            onState(tank);
+            return;
+        }
+        if (event.name === HOOK_EVENT && event.pluginID === 'dita.kelp-tank') {
+            const next = applyToolEvent(world, event.data);
+            if (next === world) return;
+            world = next;
             tank = decide(tank);
             onState(tank);
             return;

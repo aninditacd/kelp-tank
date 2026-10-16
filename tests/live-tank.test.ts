@@ -15,6 +15,7 @@ import {
     workspaceIdByName,
 } from './support/recorded-run';
 import { footerEvents, footerPaneId, footerSnapshot, footerSnapshotAt } from './support/footer-run';
+import { babyEvents, babyPaneId, babySnapshot, hookEvents } from './support/baby-fish-run';
 
 /** A fake `window.kelpi`: the test delivers events and resolves each snapshot itself. */
 /**
@@ -524,6 +525,121 @@ describe('the live tank', () => {
             const statesSoFar = fake.states.length;
             await vi.advanceTimersByTimeAsync(AGENT_TIMEOUT_MS + 60_000);
             expect(fake.states).toHaveLength(statesSoFar);
+        });
+    });
+
+    describe('what a creature is doing', () => {
+        // The recorded baby fish run: harbour-fish's own Agent calls, its subagents' Bash calls,
+        // and Kelpi's agent events, all from one real Claude session.
+        const PANE = babyPaneId('harbour-fish');
+        const upTo = (sequence: number) => babyEvents.filter((e) => e.sequence <= sequence);
+        const harbour = (fake: ReturnType<typeof fakeKelpi>) =>
+            fake.states.at(-1)?.sessions.find((s) => s.paneId === PANE);
+        const started = async () => {
+            const fake = fakeKelpi();
+            await fake.resolveSnapshot(babySnapshot);
+            return fake;
+        };
+        const idlePrompt = (sequence: number, pluginID?: string): PluginEvent => ({
+            epoch: babySnapshot.epoch,
+            sequence,
+            name: 'agent.event',
+            data: {
+                type: 'notification',
+                paneID: PANE,
+                workspaceID: babySnapshot.state.workspaces[0].id,
+                agent: 'claude',
+                status: 'waitingForInput',
+                notificationType: 'idle_prompt',
+            },
+            ...(pluginID === undefined ? {} : { pluginID }),
+        });
+
+        it('a parent tool call from the hook shows in the very next state', async () => {
+            const fake = await started();
+            upTo(40).forEach(fake.deliver);
+            expect(harbour(fake)?.activity).toBeNull();
+            upTo(41).slice(-1).forEach(fake.deliver);
+            expect(harbour(fake)).toMatchObject({ state: 'working', activity: 'agent' });
+        });
+
+        it("the tool finishing clears it, and its subagents' tool calls never show", async () => {
+            const fake = await started();
+            upTo(44).forEach(fake.deliver);
+            expect(harbour(fake)?.activity).toBeNull();
+            upTo(53)
+                .filter((e) => e.sequence > 44)
+                .forEach(fake.deliver);
+            // 46 starts a foreground Agent; 49 to 53 are its subagents' Bash calls.
+            expect(harbour(fake)?.activity).toBe('agent');
+            upTo(57)
+                .filter((e) => e.sequence > 53)
+                .forEach(fake.deliver);
+            expect(harbour(fake)?.activity).toBeNull();
+        });
+
+        it("Kelpi's stop forgets a tool still running", async () => {
+            const fake = await started();
+            upTo(53).forEach(fake.deliver);
+            expect(harbour(fake)?.activity).toBe('agent');
+            const stop = babyEvents.find((e) => e.sequence === 61)!;
+            expect(stop.name).toBe('agent.event');
+            fake.deliver(stop);
+            expect(harbour(fake)).toMatchObject({ state: 'working', activity: null });
+        });
+
+        it('a hook event from another plugin is ignored', async () => {
+            const fake = await started();
+            upTo(40).forEach(fake.deliver);
+            const pre = babyEvents.find((e) => e.sequence === 41)!;
+            fake.deliver({ ...pre, pluginID: 'someone.else', name: 'someone.else.hook' });
+            fake.deliver({ ...pre, sequence: 42, pluginID: 'someone.else' });
+            expect(harbour(fake)?.activity).toBeNull();
+        });
+
+        it('a fresh snapshot forgets every running tool', async () => {
+            const fake = await started();
+            upTo(46).forEach(fake.deliver);
+            expect(harbour(fake)?.activity).toBe('agent');
+            fake.deliver({ epoch: babySnapshot.epoch, sequence: 47, name: 'gap', data: {} });
+            const fresh = structuredClone(babySnapshot);
+            fresh.sequence = 47;
+            for (const p of fresh.state.workspaces.flatMap((w) => w.panes)) {
+                if (p.id === PANE) {
+                    Object.assign(p, {
+                        status: 'running',
+                        agentKind: 'claude',
+                        agentSessionID: hookEvents[0].data.sessionId,
+                    });
+                }
+            }
+            await fake.resolveSnapshot(fresh);
+            expect(harbour(fake)).toMatchObject({ state: 'working', activity: null });
+        });
+
+        it("Claude's idle_prompt dozes a waiting session until its next turn starts", async () => {
+            const fake = await started();
+            upTo(84).forEach(fake.deliver);
+            expect(harbour(fake)).toMatchObject({ state: 'wantsYou', dozing: false });
+            fake.deliver(idlePrompt(200));
+            expect(harbour(fake)).toMatchObject({ state: 'wantsYou', dozing: true });
+            fake.deliver({
+                ...idlePrompt(201),
+                data: {
+                    ...(idlePrompt(0).data as object),
+                    type: 'start',
+                    status: 'running',
+                    notificationType: undefined,
+                },
+            });
+            expect(harbour(fake)?.dozing).toBe(false);
+        });
+
+        it('an idle_prompt sent by a plugin dozes nothing', async () => {
+            const fake = await started();
+            upTo(84).forEach(fake.deliver);
+            fake.deliver(idlePrompt(200, 'someone.else'));
+            expect(harbour(fake)?.dozing).toBe(false);
         });
     });
 });
