@@ -49,6 +49,8 @@ export function startLiveTank(
     let quiet: ReadonlySet<string> = new Set();
     let book: AgentBook = EMPTY_BOOK;
     let babyCheck: ReturnType<typeof setInterval> | null = null;
+    // Set by `stop`, so a snapshot still on its way afterwards starts no timer and draws nothing.
+    let stopped = false;
 
     const decide = (previous: TankState | null) =>
         decideTank(world, previous, chords, quiet, { book, now: Date.now() });
@@ -140,6 +142,7 @@ export function startLiveTank(
             })
             .then(
                 ({ snapshot, panes, answeredBook }) => {
+                    if (stopped) return;
                     pending = null;
                     epoch = snapshot.epoch;
                     sequence = snapshot.sequence;
@@ -191,6 +194,7 @@ export function startLiveTank(
             if (session) await kelpi.ui.focusPane(session.workspaceId, paneId);
         },
         stop() {
+            stopped = true;
             off();
             offChrome();
             if (babyCheck !== null) clearInterval(babyCheck);

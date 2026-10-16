@@ -502,6 +502,18 @@ describe('the live tank', () => {
             expect(fake.states).toHaveLength(statesSoFar);
         });
 
+        it('stop during a snapshot leaves no baby fish re-decide running', async () => {
+            vi.useFakeTimers({ toFake: ['setInterval', 'clearInterval', 'setTimeout', 'Date'] });
+            vi.setSystemTime(T0);
+            const fake = fakeKelpi({ book: bookOf(1, ['a1'], T0) });
+            fake.live.stop();
+            await fake.resolveSnapshot(footerSnapshotAt(137));
+            expect(fake.states).toHaveLength(0);
+            await vi.advanceTimersByTimeAsync(AGENT_TIMEOUT_MS + 60_000);
+            expect(fake.states).toHaveLength(0);
+            expect(vi.getTimerCount()).toBe(0);
+        });
+
         it('stop ends the baby fish re-decide', async () => {
             vi.useFakeTimers({ toFake: ['setInterval', 'clearInterval', 'setTimeout', 'Date'] });
             vi.setSystemTime(T0);

@@ -23,7 +23,7 @@ Needs Kelpi 0.2.19 or later.
    - Or run `kelpi plugin install kelp-tank.kelpi-plugin --trust` in a Kelpi terminal.
 3. Show the tank in a sidebar with **Settings → Plugins → Workbench views**, or open it as a pane with `kelpi plugin open dita.kelp-tank dita.kelp-tank.home`.
 
-**What trust means.** A Kelpi plugin's backend runs on your computer with your account's access, like any app you install. Kelp Tank's backend lists your workspaces and listens to Kelpi's agent events. It reads the last line of each Claude reply to see whether it ends `Awaiting you: 0`, and keeps only which sessions that is true for, in memory. It never stores, logs or sends the reply. Its view reads your workspaces and sessions, saves its own settings in Kelpi, and focuses the pane you click. Install it only if you are happy to run its code, or read the source first.
+**What trust means.** A Kelpi plugin's backend runs on your computer with your account's access, like any app you install. Kelp Tank's backend lists your workspaces and listens to Kelpi's agent events. It reads the last line of each Claude reply to see whether it ends `Awaiting you: 0`, and keeps only which sessions that is true for, in memory. It never stores, logs or sends the reply. If you install the optional baby fish hook below, the backend also keeps and shares a little more; that section says exactly what. Its view reads your workspaces and sessions, saves its own settings in Kelpi, and focuses the pane you click. Install it only if you are happy to run its code, or read the source first.
 
 ## Baby fish (optional)
 
@@ -71,7 +71,7 @@ With one extra Claude Code hook, each background agent a session starts shows as
 
 If your settings already have a `hooks` object, add these four entries to it rather than replacing it.
 
-**What the hook sends.** It runs `kelpi kelp-tank` with only the hook's event name, the session id, the agent id and the tool name. It never sends the tool's input or output, Claude's reply or any path. It prints nothing, does nothing outside a Kelpi pane, and returns without waiting for Kelpi. Kelp Tank's backend keeps each running agent's id, its session id and when it was last seen, and saves that in Kelpi's plugin storage so the baby fish survive a restart.
+**What the hook sends.** It runs `kelpi kelp-tank` with only the hook's event name, the session id, the agent id and the tool name. It never sends the tool's input or output, Claude's reply or any path. It prints nothing, does nothing outside a Kelpi pane, and returns without waiting for Kelpi. Kelp Tank's backend keeps each running agent's id, its session id and when it was last seen, and saves that in Kelpi's plugin storage so the baby fish survive a restart. On each call it also sends a `dita.kelp-tank.hook` event inside Kelpi, carrying the pane, workspace, event name, session id, agent id and tool name. Kelpi delivers plugin events to every running plugin and plugin view, so any plugin you trust can see that feed.
 
 ## Build from source
 
