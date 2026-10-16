@@ -1,3 +1,4 @@
+import { dropExpired, EMPTY_BOOK, hasAgents, readBook, type AgentBook } from './agents';
 import { decideTank } from './decide-tank';
 import type { AgentHookEvent, PluginEvent, Snapshot, ViewApi } from './kelpi-api';
 import { applyChanges, worldFromSnapshot, type KelpiWorld } from './kelpi-world';
@@ -9,8 +10,13 @@ export type LiveKelpi = Pick<ViewApi, 'snapshot' | 'events' | 'ui' | 'commands'>
 
 /** The backend command that lists the panes whose last reply ended `Awaiting you: 0`. */
 const QUIET_COMMAND = 'dita.kelp-tank.quiet';
-/** How long a snapshot waits for the backend's answer before showing every waiting fish as wanting the owner. */
+/** The backend command that answers the agent book, and the event that carries each change to it. */
+const BOOK_COMMAND = 'dita.kelp-tank.agent-book';
+const BOOK_EVENT = 'dita.kelp-tank.agents';
+/** How long a snapshot waits for the backend's answers before going on without them. */
 const QUIET_WAIT_MS = 3000;
+/** While any agent is in the book, the tank re-decides this often, so a timed-out baby fish leaves. */
+const BABY_CHECK_MS = 30 * 1000;
 
 /**
  * Keeps a `TankState` current from Kelpi's pushed events, without polling, and jumps to a
@@ -23,6 +29,11 @@ const QUIET_WAIT_MS = 3000;
  * ends `Awaiting you: 0` (src/quiet.ts). A rebuilt page missed those events, so every snapshot is
  * followed by a request to the backend, which kept the quiet panes, before buffered events apply.
  * A failed request leaves every waiting fish wanting the owner: the safe side.
+ *
+ * Baby fish come from the agent book the backend keeps from Kelp Tank's Claude hook
+ * (src/agents.ts). A snapshot asks the backend for it beside the quiet panes, and each
+ * `dita.kelp-tank.agents` event replaces it as it arrives, whatever the snapshot is doing; the
+ * higher `revision` wins. A failed request gives no baby fish and no error: the hook is optional.
  */
 export function startLiveTank(
     kelpi: LiveKelpi,
@@ -36,6 +47,38 @@ export function startLiveTank(
     let pending: PluginEvent[] | null = null;
     let chords: readonly (string | null)[] = FALLBACK_CHORDS;
     let quiet: ReadonlySet<string> = new Set();
+    let book: AgentBook = EMPTY_BOOK;
+    let babyCheck: ReturnType<typeof setInterval> | null = null;
+    // Set by `stop`, so a snapshot still on its way afterwards starts no timer and draws nothing.
+    let stopped = false;
+
+    const decide = (previous: TankState | null) =>
+        decideTank(world, previous, chords, quiet, { book, now: Date.now() });
+
+    /** Takes `next` if it is newer, and re-decides then, or every `BABY_CHECK_MS` while any agent is left. */
+    function takeBook(next: AgentBook) {
+        if (next.revision <= book.revision) return;
+        book = next;
+        watchBabies();
+        if (epoch === null) return;
+        tank = decide(tank);
+        onState(tank);
+    }
+
+    function watchBabies() {
+        if (hasAgents(book)) {
+            babyCheck ??= setInterval(() => {
+                book = dropExpired(book, Date.now());
+                watchBabies();
+                if (epoch === null) return;
+                tank = decide(tank);
+                onState(tank);
+            }, BABY_CHECK_MS);
+        } else if (babyCheck !== null) {
+            clearInterval(babyCheck);
+            babyCheck = null;
+        }
+    }
 
     const needsResync = (event: PluginEvent) => event.name === 'gap' || event.epoch !== epoch;
 
@@ -44,13 +87,13 @@ export function startLiveTank(
         sequence = event.sequence;
         if (event.name === 'agent.event' && event.pluginID === undefined) {
             quiet = quietAfter(quiet, event.data as AgentHookEvent);
-            tank = decideTank(world, tank, chords, quiet);
+            tank = decide(tank);
             onState(tank);
             return;
         }
         if (event.name !== 'state.changed') return;
         world = applyChanges(world, event.data as unknown[]);
-        tank = decideTank(world, tank, chords, quiet);
+        tank = decide(tank);
         onState(tank);
     }
 
@@ -61,40 +104,53 @@ export function startLiveTank(
         // top of the answer and never under it.
         // The wait is bounded and a throw is caught: the tank is the plugin's one job, so a backend
         // that is slow to start, silent or missing must cost the quiet marks and nothing else.
-        const quietPanes = (): Promise<string[]> => {
-            const answered = new Promise<string[]>((resolve) => {
+        const ask = <T>(command: string, read: (answer: unknown) => T, fallback: T): Promise<T> => {
+            const answered = new Promise<T>((resolve) => {
                 try {
-                    kelpi.commands.execute<{ panes?: unknown }>(QUIET_COMMAND).then(
-                        (answer) =>
-                            resolve(
-                                Array.isArray(answer?.panes)
-                                    ? answer.panes.filter(
-                                          (id): id is string => typeof id === 'string',
-                                      )
-                                    : [],
-                            ),
-                        () => resolve([]),
+                    kelpi.commands.execute(command).then(
+                        (answer) => resolve(read(answer)),
+                        () => resolve(fallback),
                     );
                 } catch {
-                    resolve([]);
+                    resolve(fallback);
                 }
             });
-            const waited = new Promise<string[]>((resolve) =>
-                setTimeout(() => resolve([]), QUIET_WAIT_MS),
+            const waited = new Promise<T>((resolve) =>
+                setTimeout(() => resolve(fallback), QUIET_WAIT_MS),
             );
             return Promise.race([answered, waited]);
         };
+        const quietPanes = () =>
+            ask(
+                QUIET_COMMAND,
+                (answer) => {
+                    const panes = (answer as { panes?: unknown } | undefined)?.panes;
+                    return Array.isArray(panes)
+                        ? panes.filter((id): id is string => typeof id === 'string')
+                        : [];
+                },
+                [] as string[],
+            );
         kelpi
             .snapshot()
-            .then(async (snapshot: Snapshot) => ({ snapshot, panes: await quietPanes() }))
+            .then(async (snapshot: Snapshot) => {
+                const [panes, answeredBook] = await Promise.all([
+                    quietPanes(),
+                    ask(BOOK_COMMAND, readBook, EMPTY_BOOK),
+                ]);
+                return { snapshot, panes, answeredBook };
+            })
             .then(
-                ({ snapshot, panes }) => {
+                ({ snapshot, panes, answeredBook }) => {
+                    if (stopped) return;
                     pending = null;
                     epoch = snapshot.epoch;
                     sequence = snapshot.sequence;
                     world = worldFromSnapshot(snapshot.state);
                     quiet = new Set(panes);
-                    tank = decideTank(world, null, chords, quiet);
+                    if (answeredBook.revision > book.revision) book = answeredBook;
+                    watchBabies();
+                    tank = decide(null);
                     onState(tank);
                     for (const event of buffered) {
                         if (needsResync(event)) return resync();
@@ -110,6 +166,10 @@ export function startLiveTank(
     }
 
     const off = kelpi.events.on('*', (event) => {
+        if (event.name === BOOK_EVENT && event.pluginID === 'dita.kelp-tank') {
+            takeBook(readBook(event.data));
+            return;
+        }
         if (pending) pending.push(event);
         else if (needsResync(event)) resync();
         else apply(event);
@@ -121,7 +181,7 @@ export function startLiveTank(
             if (JSON.stringify(next) === JSON.stringify(chords)) return;
             chords = next;
             if (epoch === null) return;
-            tank = decideTank(world, tank, chords, quiet);
+            tank = decide(tank);
             onState(tank);
         },
         () => {},
@@ -134,8 +194,11 @@ export function startLiveTank(
             if (session) await kelpi.ui.focusPane(session.workspaceId, paneId);
         },
         stop() {
+            stopped = true;
             off();
             offChrome();
+            if (babyCheck !== null) clearInterval(babyCheck);
+            babyCheck = null;
         },
     };
 }

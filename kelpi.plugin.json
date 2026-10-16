@@ -24,6 +24,21 @@
       {
         "id": "dita.kelp-tank.quiet",
         "title": "Kelp Tank: Quiet sessions"
+      },
+      {
+        "id": "dita.kelp-tank.hook",
+        "title": "Kelp Tank: Hook event (used by its Claude hook)"
+      },
+      {
+        "id": "dita.kelp-tank.agent-book",
+        "title": "Kelp Tank: Background agents"
+      }
+    ],
+    "cli": [
+      {
+        "name": "kelp-tank",
+        "command": "dita.kelp-tank.hook",
+        "summary": "Pass a Claude Code hook event to Kelp Tank. Its hook script calls this."
       }
     ],
     "settings": {}

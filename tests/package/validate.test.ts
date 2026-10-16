@@ -10,14 +10,21 @@ describe('the built package', () => {
         outdir = buildToTemp();
     });
 
-    it('kelpi plugin validate accepts the built package and lists its entries', () => {
+    it("the built package passes Kelpi's offline validation and lists the kelp-tank verb", () => {
         const run = spawnSync(process.execPath, ['scripts/validate.mjs', outdir], {
             encoding: 'utf8',
         });
         expect(run.stderr).toBe('');
         expect(run.status).toBe(0);
-        const report = JSON.parse(run.stdout) as { pluginID: string; files: { path: string }[] };
+        const report = JSON.parse(run.stdout) as {
+            pluginID: string;
+            files: { path: string }[];
+            cli: unknown[];
+        };
         expect(report.pluginID).toBe('dita.kelp-tank');
+        expect(report.cli).toEqual([
+            expect.objectContaining({ name: 'kelp-tank', command: 'dita.kelp-tank.hook' }),
+        ]);
         expect(report.files.map((file) => file.path).sort()).toEqual([
             'backend.mjs',
             'kelpi.plugin.json',
@@ -35,6 +42,7 @@ describe('the built package', () => {
             contributes: {
                 views: { id: string; entry: string; placements: string[]; stateVersion: number }[];
                 commands: { id: string }[];
+                cli: { name: string; command: string; summary: string }[];
             };
         };
         expect(manifest.id).toBe('dita.kelp-tank');
@@ -50,6 +58,21 @@ describe('the built package', () => {
         expect(manifest.contributes.commands.map((command) => command.id)).toEqual([
             'dita.kelp-tank.summary',
             'dita.kelp-tank.quiet',
+            'dita.kelp-tank.hook',
+            'dita.kelp-tank.agent-book',
+        ]);
+    });
+
+    it('the manifest declares the kelp-tank verb for the hook command', () => {
+        const manifest = JSON.parse(
+            readFileSync(path.join(outdir, 'kelpi.plugin.json'), 'utf8'),
+        ) as { contributes: { cli?: { name: string; command: string; summary: string }[] } };
+        expect(manifest.contributes.cli).toEqual([
+            {
+                name: 'kelp-tank',
+                command: 'dita.kelp-tank.hook',
+                summary: expect.stringContaining('Claude Code hook'),
+            },
         ]);
     });
 });

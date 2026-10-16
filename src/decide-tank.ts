@@ -1,3 +1,4 @@
+import { liveAgents, type AgentBook } from './agents';
 import { sidebarOrder, type KelpiWorld, type WorldPane } from './kelpi-world';
 import { FALLBACK_CHORDS, workspaceShortcuts } from './shortcuts';
 import type { SessionRole, SessionState, TankSession, TankState } from './tank-state';
@@ -45,12 +46,15 @@ function displayNameOf(pane: WorldPane): string {
  * reported `closed` once from it, so the scene can swim it off, and dropped the time after.
  * `quiet` holds the panes whose last reply ended `Awaiting you: 0` (src/quiet.ts): such a pane
  * that is waiting shows `update`, except a rail, which keeps relaying as before.
+ * `babies` is the agent book from Kelp Tank's Claude hook and the time to judge it at; a session's
+ * baby fish are its pane's live agents of its own session id. Null, as without the hook, gives none.
  */
 export function decideTank(
     world: KelpiWorld,
     previous: TankState | null,
     chords: readonly (string | null)[] = FALLBACK_CHORDS,
     quiet: ReadonlySet<string> = new Set(),
+    babies: { book: AgentBook; now: number } | null = null,
 ): TankState {
     const live: TankSession[] = world.panes
         .filter((pane) => pane.agentKind !== null)
@@ -68,6 +72,10 @@ export function decideTank(
                         ? 'update'
                         : state,
                 relaysTo: null,
+                babies:
+                    babies === null || pane.agentSessionId === null
+                        ? []
+                        : liveAgents(babies.book, pane.id, pane.agentSessionId, babies.now),
             };
         });
 
@@ -84,7 +92,7 @@ export function decideTank(
 
     const vanished = (previous?.sessions ?? [])
         .filter((old) => old.state !== 'closed' && !live.some((s) => s.paneId === old.paneId))
-        .map((old) => ({ ...old, state: 'closed' as const, relaysTo: null }));
+        .map((old) => ({ ...old, state: 'closed' as const, relaysTo: null, babies: [] }));
 
     const ledges = new Set(sessions.filter((s) => s.state !== 'closed').map((s) => s.workspaceId));
     const shortcuts = workspaceShortcuts(world, chords);

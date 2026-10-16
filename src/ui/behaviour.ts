@@ -177,6 +177,23 @@ export function followPoint(leader: Vec3, heading: Vec3, slot: number): Vec3 {
     };
 }
 
+/**
+ * Where baby fish `index` swims beside its parent: behind the parent's tail, alternately above
+ * and below its path, in rows that step back two at a time, with a small bob so it looks alive.
+ * `heading` is the parent's unit direction of travel.
+ */
+export function babyPoint(parent: Vec3, heading: Vec3, index: number, t: number): Vec3 {
+    const row = Math.floor(index / 2);
+    const side = index % 2 ? 1 : -1;
+    const back = 0.16 + row * 0.09;
+    const bob = Math.sin(t * 3 + index * 1.7) * 0.012;
+    return {
+        x: parent.x - heading.x * back,
+        y: parent.y - heading.y * back + side * (0.07 + row * 0.02) + bob,
+        z: parent.z - heading.z * back - side * 0.03,
+    };
+}
+
 /** Straight out past the nearer side wall. It does not depend on the ledge still existing. */
 export function exitPoint(pos: Vec3, worldWidth: number): Vec3 {
     const side = pos.x >= 0 ? 1 : -1;

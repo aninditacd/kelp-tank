@@ -1,5 +1,6 @@
 import { readFileSync } from 'node:fs';
 import { afterEach, describe, expect, it, vi } from 'vitest';
+import { AGENT_TIMEOUT_MS, EMPTY_BOOK, type AgentBook } from '../src/agents';
 import { decideTank } from '../src/decide-tank';
 import type { ChromeSnapshot, PluginEvent, Snapshot } from '../src/kelpi-api';
 import { worldFromSnapshot } from '../src/kelpi-world';
@@ -18,9 +19,17 @@ import { footerEvents, footerPaneId, footerSnapshot, footerSnapshotAt } from './
 /** A fake `window.kelpi`: the test delivers events and resolves each snapshot itself. */
 /**
  * `seed` is what the backend's quiet command answers: pane ids, or an Error to fail with.
- * `holdSeed` leaves each answer pending until the test calls `answerSeed`.
+ * `holdSeed` leaves each answer pending until the test calls `answerSeed`. `book` is what the
+ * backend's agent book command answers, and `holdBook` holds it until `answerBook`.
  */
-function fakeKelpi(options: { seed?: string[] | Error; holdSeed?: boolean } = {}) {
+function fakeKelpi(
+    options: {
+        seed?: string[] | Error;
+        holdSeed?: boolean;
+        book?: AgentBook | Error;
+        holdBook?: boolean;
+    } = {},
+) {
     const listeners: ((event: PluginEvent) => void)[] = [];
     const snapshots: { resolve(s: Snapshot): void; reject(e: Error): void }[] = [];
     const focusPane = vi.fn<(workspaceID: string, paneID: string) => Promise<void>>(async () => {});
@@ -31,7 +40,13 @@ function fakeKelpi(options: { seed?: string[] | Error; holdSeed?: boolean } = {}
     } = {};
     const errors: Error[] = [];
     const seeds: { resolve(): void }[] = [];
+    const books: { resolve(): void }[] = [];
     const execute = vi.fn(async (id: string) => {
+        if (id === 'dita.kelp-tank.agent-book') {
+            if (options.holdBook) await new Promise<void>((resolve) => books.push({ resolve }));
+            if (options.book instanceof Error) throw options.book;
+            return options.book ?? EMPTY_BOOK;
+        }
         expect(id).toBe('dita.kelp-tank.quiet');
         if (options.holdSeed) await new Promise<void>((resolve) => seeds.push({ resolve }));
         if (options.seed instanceof Error) throw options.seed;
@@ -78,6 +93,10 @@ function fakeKelpi(options: { seed?: string[] | Error; holdSeed?: boolean } = {}
         deliver: (event: PluginEvent) => listeners.forEach((listener) => listener(event)),
         /** Resolves the oldest unresolved snapshot request, then lets its handler run. */
         execute,
+        answerBook: async () => {
+            books.shift()!.resolve();
+            await new Promise((resolve) => setImmediate(resolve));
+        },
         answerSeed: async () => {
             seeds.shift()!.resolve();
             await new Promise((resolve) => setImmediate(resolve));
@@ -343,7 +362,9 @@ describe('the live tank', () => {
             // A page opened just after the stop at 137: it never heard the stop.
             const fake = fakeKelpi({ seed: [footerPaneId('update-fish')] });
             await fake.resolveSnapshot(footerSnapshotAt(137));
-            expect(fake.execute).toHaveBeenCalledTimes(1);
+            expect(
+                fake.execute.mock.calls.filter(([id]) => id === 'dita.kelp-tank.quiet'),
+            ).toHaveLength(1);
             expect(stateOf(fake, 'update-fish')).toBe('update');
             const bare = fakeKelpi();
             await bare.resolveSnapshot(footerSnapshotAt(137));
@@ -388,6 +409,121 @@ describe('the live tank', () => {
         it('the live tank never writes to storage', () => {
             const source = readFileSync('src/live-tank.ts', 'utf8');
             expect(source).not.toMatch(/storage/);
+        });
+    });
+
+    describe('baby fish', () => {
+        const T0 = 1_760_000_000_000;
+        const PANE = footerPaneId('update-fish');
+        const SESSION = footerSnapshotAt(137)
+            .state.workspaces.flatMap((w) => w.panes)
+            .find((p) => p.id === PANE)!.agentSessionID!;
+        const bookOf = (revision: number, agents: string[], at = T0): AgentBook => ({
+            revision,
+            panes: agents.length
+                ? {
+                      [PANE]: {
+                          sessionId: SESSION,
+                          agents: Object.fromEntries(
+                              agents.map((id) => [id, { startedAt: at, lastSeen: at }]),
+                          ),
+                      },
+                  }
+                : {},
+        });
+        const agentsEvent = (book: AgentBook, pluginID = 'dita.kelp-tank'): PluginEvent => ({
+            epoch: footerSnapshot.epoch,
+            sequence: 10_000 + book.revision,
+            name: 'dita.kelp-tank.agents',
+            data: book,
+            pluginID,
+        });
+        const babiesOf = (fake: ReturnType<typeof fakeKelpi>) =>
+            fake.states.at(-1)?.sessions.find((s) => s.paneId === PANE)?.babies;
+
+        it('an agents event updates the baby fish without a new snapshot', async () => {
+            const fake = fakeKelpi();
+            await fake.resolveSnapshot(footerSnapshotAt(137));
+            expect(babiesOf(fake)).toEqual([]);
+            fake.deliver(agentsEvent(bookOf(1, ['a1'], Date.now())));
+            expect(babiesOf(fake)).toEqual(['a1']);
+            expect(fake.kelpi.snapshot).toHaveBeenCalledTimes(1);
+        });
+
+        it('a new page takes the baby fish from the backend', async () => {
+            const fake = fakeKelpi({ book: bookOf(4, ['a1', 'a2'], Date.now()) });
+            await fake.resolveSnapshot(footerSnapshotAt(137));
+            expect(babiesOf(fake)).toEqual(['a1', 'a2']);
+        });
+
+        it('an agents event from another plugin is ignored', async () => {
+            const fake = fakeKelpi();
+            await fake.resolveSnapshot(footerSnapshotAt(137));
+            const statesSoFar = fake.states.length;
+            fake.deliver(agentsEvent(bookOf(1, ['a1'], Date.now()), 'someone.else'));
+            expect(fake.states).toHaveLength(statesSoFar);
+            expect(babiesOf(fake)).toEqual([]);
+        });
+
+        it('an older answered book does not undo a newer agents event', async () => {
+            const fake = fakeKelpi({ book: bookOf(3, []), holdBook: true });
+            await fake.resolveSnapshot(footerSnapshotAt(137));
+            // The hook ran while the backend's answer was still on its way.
+            fake.deliver(agentsEvent(bookOf(5, ['a1'], Date.now())));
+            await fake.answerBook();
+            expect(babiesOf(fake)).toEqual(['a1']);
+            fake.deliver(agentsEvent(bookOf(4, [])));
+            expect(babiesOf(fake)).toEqual(['a1']);
+        });
+
+        it('the tank still shows sessions when the agent book cannot be read', async () => {
+            const fake = fakeKelpi({ book: new Error('no backend') });
+            await fake.resolveSnapshot(footerSnapshotAt(137));
+            expect(fake.errors).toEqual([]);
+            expect(fake.states.at(-1)?.sessions.length).toBeGreaterThan(0);
+            expect(fake.states.at(-1)?.sessions.every((s) => s.babies.length === 0)).toBe(true);
+        });
+
+        it('a timed-out baby fish leaves without a new event', async () => {
+            vi.useFakeTimers({ toFake: ['setInterval', 'clearInterval', 'setTimeout', 'Date'] });
+            vi.setSystemTime(T0);
+            const fake = fakeKelpi();
+            await fake.resolveSnapshot(footerSnapshotAt(137));
+            fake.deliver(agentsEvent(bookOf(1, ['a1'], T0)));
+            expect(babiesOf(fake)).toEqual(['a1']);
+            await vi.advanceTimersByTimeAsync(AGENT_TIMEOUT_MS);
+            expect(babiesOf(fake)).toEqual(['a1']);
+            await vi.advanceTimersByTimeAsync(31_000);
+            expect(babiesOf(fake)).toEqual([]);
+            expect(fake.kelpi.snapshot).toHaveBeenCalledTimes(1);
+            // With no agent left, the tank stops re-deciding.
+            const statesSoFar = fake.states.length;
+            await vi.advanceTimersByTimeAsync(10 * 60 * 1000);
+            expect(fake.states).toHaveLength(statesSoFar);
+        });
+
+        it('stop during a snapshot leaves no baby fish re-decide running', async () => {
+            vi.useFakeTimers({ toFake: ['setInterval', 'clearInterval', 'setTimeout', 'Date'] });
+            vi.setSystemTime(T0);
+            const fake = fakeKelpi({ book: bookOf(1, ['a1'], T0) });
+            fake.live.stop();
+            await fake.resolveSnapshot(footerSnapshotAt(137));
+            expect(fake.states).toHaveLength(0);
+            await vi.advanceTimersByTimeAsync(AGENT_TIMEOUT_MS + 60_000);
+            expect(fake.states).toHaveLength(0);
+            expect(vi.getTimerCount()).toBe(0);
+        });
+
+        it('stop ends the baby fish re-decide', async () => {
+            vi.useFakeTimers({ toFake: ['setInterval', 'clearInterval', 'setTimeout', 'Date'] });
+            vi.setSystemTime(T0);
+            const fake = fakeKelpi();
+            await fake.resolveSnapshot(footerSnapshotAt(137));
+            fake.deliver(agentsEvent(bookOf(1, ['a1'], T0)));
+            fake.live.stop();
+            const statesSoFar = fake.states.length;
+            await vi.advanceTimersByTimeAsync(AGENT_TIMEOUT_MS + 60_000);
+            expect(fake.states).toHaveLength(statesSoFar);
         });
     });
 });

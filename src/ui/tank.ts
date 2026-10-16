@@ -29,6 +29,7 @@ import {
     decideGoals,
     driftPoint,
     exitPoint,
+    babyPoint,
     followPoint,
     glassSpot,
     isGone,
@@ -41,7 +42,7 @@ import {
     type Vec3,
 } from './behaviour';
 import { kelpTint, workspaceHex } from './colors';
-import { type Creature, makeCreature, NOSE } from './creatures';
+import { type Creature, makeBaby, makeCreature, NOSE } from './creatures';
 import { type AlertFx, makeAlertFx, makeRipple, makeTickFx, type TickFx } from './effects';
 import { DEPTH, layoutTank, PX_PER_UNIT, type TankLayout } from './layout';
 import { entranceFor, openingView, type TankMemory, type TankSnapshot } from './memory';
@@ -165,6 +166,21 @@ interface Swimmer extends Creature {
     updateT: number | null;
 }
 
+/** A baby fish: one background agent of a session, swimming beside the session's creature. */
+interface Baby extends Creature {
+    parentId: string;
+    index: number;
+    pos: Vector3;
+    vel: Vector3;
+    yaw: number;
+    phase: number;
+    /** Seconds left of its shrink, once its agent or its parent has left; null while it stays. */
+    fading: number | null;
+}
+
+/** How long a leaving baby fish takes to shrink away. */
+const BABY_FADE = 0.5;
+
 /** The goals that put a creature at the front glass. */
 const atGlass = (goal: Goal) => goal.kind === 'glass' || goal.kind === 'update';
 
@@ -210,6 +226,8 @@ export function createTank(canvas: HTMLCanvasElement, options: TankOptions): Tan
     let height = 0;
     let frame = 0;
     const swimmers = new Map<string, Swimmer>();
+    // Keyed `<paneId>/<agentId>`. Never remembered across pages: a new page spawns them at their parents.
+    const babies = new Map<string, Baby>();
     const ripples: { mesh: Mesh; age: number }[] = [];
     // `received` turns on with the first state from Kelpi, and `settled` once creatures for it
     // exist. Until then nothing counts as arriving, so the empty start-up layout never makes the
@@ -540,7 +558,81 @@ export function createTank(canvas: HTMLCanvasElement, options: TankOptions): Tan
                 c.goal = { kind: 'leave' };
             }
         }
+        syncBabies();
         settled = true;
+    }
+
+    /** Spawns a baby fish at its parent for each new agent, and starts the shrink of each that left. */
+    function syncBabies() {
+        const wanted = new Map<string, { parentId: string; index: number }>();
+        for (const s of state.sessions) {
+            s.babies.forEach((agentId, index) =>
+                wanted.set(`${s.paneId}/${agentId}`, { parentId: s.paneId, index }),
+            );
+        }
+        for (const [key, want] of wanted) {
+            const parent = swimmers.get(want.parentId);
+            const baby = babies.get(key);
+            if (baby) {
+                baby.index = want.index;
+                if (parent && !parent.leaving) baby.fading = null;
+                continue;
+            }
+            if (!parent || parent.leaving) continue;
+            const made = makeBaby(parent.colorHex, want.parentId);
+            const born: Baby = {
+                ...made,
+                parentId: want.parentId,
+                index: want.index,
+                pos: parent.pos.clone(),
+                vel: new Vector3(),
+                yaw: parent.yaw,
+                phase: Math.random() * 10,
+                fading: null,
+            };
+            made.group.position.copy(born.pos);
+            scene.add(made.group);
+            babies.set(key, born);
+        }
+        for (const [key, baby] of babies) {
+            if (!wanted.has(key) && baby.fading === null) baby.fading = BABY_FADE;
+        }
+    }
+
+    function stepBaby(key: string, b: Baby, dt: number, t: number) {
+        const parent = swimmers.get(b.parentId);
+        if (b.fading === null && (!parent || parent.leaving)) b.fading = BABY_FADE;
+        if (b.fading !== null) {
+            b.fading -= dt;
+            if (b.fading <= 0) {
+                scene.remove(b.group);
+                babies.delete(key);
+                return;
+            }
+        }
+        if (parent) {
+            const heading =
+                parent.vel.lengthSq() > 1e-4
+                    ? parent.vel.clone().normalize()
+                    : new Vector3(Math.cos(parent.yaw), 0, -Math.sin(parent.yaw));
+            const p = babyPoint(parent.pos, heading, b.index, t + b.phase);
+            const want = new Vector3(p.x, p.y, p.z).sub(b.pos);
+            // Quick enough to keep up with a parent swimming to the glass.
+            b.vel.lerp(want.multiplyScalar(4), 1 - Math.exp(-dt * 4));
+            b.pos.addScaledVector(b.vel, dt);
+            if (Math.hypot(b.vel.x, b.vel.z) > 0.015) {
+                b.yaw = lerpAngle(b.yaw, Math.atan2(-b.vel.z, b.vel.x), 1 - Math.exp(-dt * 6));
+            }
+        }
+        const shrink = b.fading === null ? 1 : b.fading / BABY_FADE;
+        b.group.scale.set(b.scale * 0.85 * shrink, b.scale * shrink, b.scale * shrink);
+        b.group.position.copy(b.pos);
+        b.group.rotation.set(0, b.yaw, MathUtils.clamp(b.vel.y * 1.5, -0.5, 0.5));
+        const rate = 10 + b.vel.length() * 24;
+        if (b.tail) b.tail.rotation.y = Math.sin(t * rate + b.phase) * 0.45;
+        b.fins?.forEach((fin, i) => {
+            fin.rotation.x = (i ? -1 : 1) * Math.sin(t * rate * 0.6 + b.phase) * 0.5;
+        });
     }
 
     /** After a re-layout: refresh each creature's ledge and keep it inside the new walls. */
@@ -713,7 +805,11 @@ export function createTank(canvas: HTMLCanvasElement, options: TankOptions): Tan
         const x = e.clientX - rect.left;
         const y = e.clientY - rect.top;
         const ndc = { x: (x / rect.width) * 2 - 1, y: -(y / rect.height) * 2 + 1 };
-        const groups = [...swimmers.values()].filter((c) => !c.leaving).map((c) => c.group);
+        // A baby fish carries its parent's pane id, so it hovers and clicks as its parent.
+        const groups = [
+            ...[...swimmers.values()].filter((c) => !c.leaving).map((c) => c.group),
+            ...[...babies.values()].filter((b) => b.fading === null).map((b) => b.group),
+        ];
         return { paneId: pickPaneId(ndc, camera, groups), x, y };
     }
     const onMove = (e: MouseEvent) => {
@@ -820,6 +916,7 @@ export function createTank(canvas: HTMLCanvasElement, options: TankOptions): Tan
             step(c, dt, t);
             if (c.gone) removeSwimmer(c);
         }
+        for (const [key, b] of [...babies]) stepBaby(key, b, dt, t);
         if (width > 0) renderer.render(scene, camera);
         frame = requestAnimationFrame(tick);
     }
@@ -868,6 +965,8 @@ export function createTank(canvas: HTMLCanvasElement, options: TankOptions): Tan
             canvas.removeEventListener('pointerleave', onLeave);
             canvas.removeEventListener('click', onClick);
             for (const c of [...swimmers.values()]) removeSwimmer(c);
+            for (const b of babies.values()) scene.remove(b.group);
+            babies.clear();
             for (const r of ripples) (r.mesh.material as MeshBasicMaterial).dispose();
             tip.remove();
             zoomBar.remove();

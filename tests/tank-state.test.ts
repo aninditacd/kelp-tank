@@ -28,6 +28,7 @@ describe('TankState', () => {
             displayName: string;
             role: SessionRole;
             state: SessionState;
+            babies: string[];
         }>();
         expectTypeOf<TankState>().toEqualTypeOf<{
             workspaces: TankWorkspace[];

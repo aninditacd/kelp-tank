@@ -1,0 +1,9 @@
+{
+    "session_id": "55e220b3-2d91-4c4e-99a9-70172f689bf8",
+    "transcript_path": "/srv/demo/.claude/projects/-srv-demo-harbour/55e220b3-2d91-4c4e-99a9-70172f689bf8.jsonl",
+    "cwd": "/srv/demo/harbour",
+    "prompt_id": "389ced17-bf07-4a0b-8915-0ec2e2e7cf1c",
+    "agent_id": "a8906a2938207bc26",
+    "agent_type": "general-purpose",
+    "hook_event_name": "SubagentStart"
+}

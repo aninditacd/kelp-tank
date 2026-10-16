@@ -100,3 +100,27 @@ It feeds the "Awaiting you" footer rule (`src/quiet.ts`). All panes are in one w
 
 **What the run showed about ordering.** A stop is not always the very next sequence after its pane's status change. Kelpi publishes the status change, then at most a `daemon.notification` and a title update, then the stop; the run's stops follow their status change by one to three sequences, with no other hook event between. `tests/quiet.test.ts` checks that.
 
+
+# Baby fish run
+
+`baby-fish-run.jsonl` was captured on 16 Oct 2026 by Rail I, from Kelpi's private instance at Kelpi tag `v0.2.19`, with `kelpi plugin watch`. Line 1 is the snapshot (sequence 27). Only `state.changed`, `agent.event`, `dita.kelp-tank.agents` and `dita.kelp-tank.hook` lines are kept. The stream also carried 45 `daemon.system-stats` lines, 1 `daemon.notification` and 1 `daemon.attention-request`, which were left out whole. Paths were scrubbed by exact string replacement: Claude's transcript folder is `/srv/demo/.claude/projects/-srv-demo-harbour`, and the home folder is `/srv/demo/home`. No other line was altered.
+
+It feeds the baby fish (`src/agents.ts`). Everything in it is real: the built plugin was installed in the instance, and a real `claude -p --model haiku` session ran in a scratch folder with `--setting-sources project --settings <scratch file>` and `KELPI_PANE_ID` set to the `harbour-fish` pane in workspace Harbour. The scratch settings ran the README's hook block (`claude-hook/kelp-tank-hook.mjs` for `SubagentStart`, `SubagentStop`, `PreToolUse` and `PostToolUse`, with `"async": true`), plus Kelpi's own `kelpi event` hooks for the session's status, against the instance's socket only.
+
+| Sequence | What happened |
+| --- | --- |
+| 33-38 | The session starts and its turn begins. |
+| 41-43 | Claude launches a background agent (`run_in_background`), told to run `sleep 20` and then `echo`. Its start gives the book one agent. |
+| 46-48 | Claude launches a foreground agent, told to run `ls`. The book holds two agents. |
+| 49-57 | Both agents run `Bash`. The foreground agent stops (55), leaving one agent. |
+| 59-61 | Claude's first reply ends (a `stop` with the pane still `running`) while the background agent still runs. |
+| 70-75 | The background agent finishes its tool calls and stops (74). The book is empty. |
+| 76-86 | Claude takes a second turn for the finished agent, stops, then the session ends (`session-end`, session id cleared, the pane still open). |
+
+The prompt told Claude not to wait for the background agent, but `claude -p` still waited before it exited. So the run has no session that ends with an agent still running. The test for that case replays the session end with the book from before the background agent's stop.
+
+# Hook payloads
+
+`hook-payloads/` holds one real Claude Code 2.1.301 hook payload per event Kelp Tank's hook handles: `subagent-start.json`, `subagent-stop.json`, `pre-tool-use.json` and `post-tool-use.json`. They come from an earlier run on 16 Oct 2026, of the same kind as the one above, in which two subagents ran in the same private-instance pane. The tool calls are from inside a subagent, so they carry `agent_id`.
+
+Each was changed by hand in only these ways: `cwd`, `transcript_path` and `agent_transcript_path` are scrubbed to `/srv/demo/...`; `tool_input`, `tool_response.stdout`, `last_assistant_message` and the background task's `description` are replaced by made-up text about moorings and tide charts. The hook tests check that none of that text reaches `kelpi`.
