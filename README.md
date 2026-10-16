@@ -4,6 +4,10 @@ Kelp Tank is a plugin for [Kelpi](https://github.com/benfriebe/kelpi), the termi
 
 ![Kelp Tank in Kelpi's sidebar](docs/screenshots/kelp-tank.png)
 
+A session that only posted an update, left, wears a tick and does not glow. The three beside it want you.
+
+![An update creature beside three that want you](docs/screenshots/update-and-wants-you.png)
+
 - Each Kelpi workspace gets a rock ledge with its name, its shortcut and kelp in its colour.
 - A session is a round fish. A session named after a day, such as `wed-15-10-2026`, is a turtle. A name containing `conduct` is a pufferfish with a crown, and a name ending in `rail-a`, `rail-b` and so on, or a handover such as `rail-r2`, is a tiny fish that follows its conductor.
 - A working session swims around its ledge, and an idle one drifts slowly near it. A session waiting for you swims to the glass, glows and shows a "!" bubble. A session whose last reply ends `Awaiting you: 0` is only an update: it swims to the glass, wears a small tick for a moment, then rests. A waiting rail nudges its conductor instead, and a muted workspace never glows.
