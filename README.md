@@ -32,6 +32,8 @@ With one extra Claude Code hook, each background agent a session starts shows as
 
 The same hook shows what a working creature is doing: pages circle it while Claude reads or searches files, a pencil doodles round it while Claude edits, a tiny terminal scrolls beside it for a command, a globe orbits it on the web, and a "..." thought bubble floats above it while a subagent works. Without the hook, a working creature just swims.
 
+![What a creature shows for each tool, tired and dozing, from Kelpi's private instance](docs/screenshots/activities.png)
+
 ![A session with four background agents, each a baby fish](docs/screenshots/baby-fish.png)
 
 1. Copy [`claude-hook/kelp-tank-hook.mjs`](claude-hook/kelp-tank-hook.mjs) from this repo somewhere on your computer. It needs Node 18 or later and nothing else.
