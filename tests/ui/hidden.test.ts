@@ -29,7 +29,7 @@ function session(
     state: SessionState,
     relaysTo: string | null = null,
 ): TankSession {
-    return { paneId, workspaceId, displayName: paneId, role, state, relaysTo };
+    return { paneId, workspaceId, displayName: paneId, role, state, relaysTo, babies: [] };
 }
 
 const STATE: TankState = {
@@ -54,6 +54,20 @@ function fakeStorage(initial: Record<string, unknown> = {}) {
         },
     };
 }
+
+describe('baby fish in hidden workspaces', () => {
+    it('a hidden workspace shows no baby fish', () => {
+        const state: TankState = {
+            workspaces: [A, B],
+            sessions: [
+                { ...session('p1', 'a', 'fish', 'working'), babies: ['a1', 'a2'] },
+                { ...session('p2', 'b', 'fish', 'working'), babies: ['b1'] },
+            ],
+        };
+        const shown = visibleState(state, new Set(['a']));
+        expect(shown.sessions.flatMap((s) => s.babies)).toEqual(['b1']);
+    });
+});
 
 describe('hiding workspaces', () => {
     it("a hidden workspace's ledge and creatures leave the tank", () => {

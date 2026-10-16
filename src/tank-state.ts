@@ -52,4 +52,10 @@ export interface TankSession {
      * Null for every other session.
      */
     relaysTo: string | null;
+    /**
+     * The session's live background agents, oldest first, from Kelp Tank's Claude hook
+     * (src/agents.ts). Each is a baby fish beside the creature. Empty for a closed session, and
+     * for every session when the hook is not installed.
+     */
+    babies: string[];
 }

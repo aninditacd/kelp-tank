@@ -70,7 +70,7 @@ export function parseHookArgv(argv: readonly string[]): HookCall | null {
 const expired = (agent: BookAgent, now: number) => now - agent.lastSeen > AGENT_TIMEOUT_MS;
 
 /** The book without timed-out agents and empty panes, or `book` itself when none were dropped. */
-function prune(book: AgentBook, now: number): AgentBook {
+export function dropExpired(book: AgentBook, now: number): AgentBook {
     let dropped = false;
     const panes: AgentBook['panes'] = {};
     for (const [paneId, entry] of Object.entries(book.panes)) {
@@ -96,7 +96,7 @@ export function applyHook(
     paneId: string,
     now: number,
 ): { book: AgentBook; changed: boolean } {
-    const pruned = prune(book, now);
+    const pruned = dropExpired(book, now);
     const panes = { ...pruned.panes };
     const entry = panes[paneId];
     const ours = entry?.sessionId === call.sessionId ? entry : undefined;

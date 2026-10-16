@@ -54,6 +54,7 @@ function session(
         role,
         state,
         relaysTo: null,
+        babies: [],
         ...extra,
     };
 }

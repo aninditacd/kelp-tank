@@ -1,7 +1,9 @@
 import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
+import { EMPTY_BOOK, type AgentBook } from '../src/agents';
 import { decideTank, roleForName, sessionName } from '../src/decide-tank';
 import type { KelpiWorld, WorldPane } from '../src/kelpi-world';
+import { FALLBACK_CHORDS } from '../src/shortcuts';
 import type { TankSession, TankState } from '../src/tank-state';
 import {
     paneIdByLabel,
@@ -382,5 +384,81 @@ describe('the decider and quiet panes', () => {
             new Set(['p1']),
         );
         expect(tank.sessions[0].state).toBe('closed');
+    });
+});
+
+describe('baby fish', () => {
+    const NOW = 1_760_000_000_000;
+    const NONE = new Set<string>();
+    /** A book holding `agents` (id: started this many ms ago) for pane `p1`, session `session-p1`. */
+    function book(agents: Record<string, number>, sessionId = 'session-p1'): AgentBook {
+        return {
+            revision: 1,
+            panes: {
+                p1: {
+                    sessionId,
+                    agents: Object.fromEntries(
+                        Object.entries(agents).map(([id, ago]) => [
+                            id,
+                            { startedAt: NOW - ago, lastSeen: NOW - ago },
+                        ]),
+                    ),
+                },
+            },
+        };
+    }
+    const world = handBuilt([livePane('p1', 'A', 'kelp-tank'), livePane('p2', 'A', 'other')]);
+
+    it('without the hook every session has no baby fish', () => {
+        expect(decideTank(world, null).sessions.map((s) => s.babies)).toEqual([[], []]);
+        const empty = decideTank(world, null, FALLBACK_CHORDS, NONE, {
+            book: EMPTY_BOOK,
+            now: NOW,
+        });
+        expect(empty.sessions.map((s) => s.babies)).toEqual([[], []]);
+    });
+
+    it("a session's baby fish are its pane's live agents, oldest first", () => {
+        const tank = decideTank(world, null, FALLBACK_CHORDS, NONE, {
+            book: book({ young: 1000, old: 5000 }),
+            now: NOW,
+        });
+        expect(tank.sessions.map((s) => [s.paneId, s.babies])).toEqual([
+            ['p1', ['old', 'young']],
+            ['p2', []],
+        ]);
+    });
+
+    it("another session's agents in the same pane are not its baby fish", () => {
+        const tank = decideTank(world, null, FALLBACK_CHORDS, NONE, {
+            book: book({ a1: 0 }, 'an-ended-session'),
+            now: NOW,
+        });
+        expect(tank.sessions.map((s) => s.babies)).toEqual([[], []]);
+    });
+
+    it('a session that ends takes all its baby fish', () => {
+        const babies = { book: book({ a1: 0 }), now: NOW };
+        const before = decideTank(world, null, FALLBACK_CHORDS, NONE, babies);
+        expect(before.sessions[0].babies).toEqual(['a1']);
+        // Its Claude session ended: Kelpi cleared the session id and kept the pane.
+        const ended = handBuilt([
+            livePane('p1', 'A', 'kelp-tank', { agentSessionId: null }),
+            livePane('p2', 'A', 'other'),
+        ]);
+        const after = decideTank(ended, before, FALLBACK_CHORDS, NONE, babies);
+        expect(after.sessions[0]).toMatchObject({ state: 'closed', babies: [] });
+        // Its pane closed: the session is reported closed once, from the previous decision.
+        const closed = decideTank(
+            handBuilt([livePane('p2', 'A', 'other')]),
+            before,
+            FALLBACK_CHORDS,
+            NONE,
+            babies,
+        );
+        expect(closed.sessions.find((s) => s.paneId === 'p1')).toMatchObject({
+            state: 'closed',
+            babies: [],
+        });
     });
 });
