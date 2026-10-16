@@ -54,6 +54,7 @@ import { DEPTH, layoutTank, PX_PER_UNIT, type TankLayout } from './layout';
 import { entranceFor, openingView, type TankMemory, type TankSnapshot } from './memory';
 import { paceFrame } from './pacing';
 import { pickPaneId } from './pick';
+import { nextCanvas } from './pixels';
 import { blob, toon } from './toon';
 import { tooltipText } from './tooltip';
 import {
@@ -216,7 +217,6 @@ function lerpAngle(a: number, b: number, t: number): number {
 export function createTank(canvas: HTMLCanvasElement, options: TankOptions): Tank {
     const parent = canvas.parentElement!;
     const renderer = new WebGLRenderer({ canvas, antialias: true });
-    renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
 
     const scene = new Scene();
     const camera = new PerspectiveCamera(30, 1, 0.1, 50);
@@ -242,6 +242,7 @@ export function createTank(canvas: HTMLCanvasElement, options: TankOptions): Tan
     let bubbles: Bubble[] = [];
     let width = 0;
     let height = 0;
+    let ratio = 0;
     let frame = 0;
     const swimmers = new Map<string, Swimmer>();
     // Keyed `<paneId>/<agentId>`. Never remembered across pages: a new page spawns them at their parents.
@@ -437,16 +438,37 @@ export function createTank(canvas: HTMLCanvasElement, options: TankOptions): Tan
     }
 
     function resize() {
-        const w = Math.round(parent.clientWidth);
-        const h = Math.round(parent.clientHeight);
-        if (w < 2 || h < 2 || (w === width && h === height)) return;
-        width = w;
-        height = h;
+        const next = nextCanvas(
+            { width, height, ratio },
+            parent.clientWidth,
+            parent.clientHeight,
+            window.devicePixelRatio,
+        );
+        if (!next) return;
+        const relay = next.width !== width || next.height !== height;
+        ({ width, height, ratio } = next);
+        renderer.setPixelRatio(ratio);
         renderer.setSize(width, height);
-        build();
-        sync();
+        // A new pixel ratio alone (the window moved to another screen) keeps the layout.
+        if (relay) {
+            build();
+            sync();
+        }
         // Resizing blanks the canvas, and the next frame may be one the frame cap skips.
         renderer.render(scene, camera);
+    }
+
+    // The window's pixel ratio changes when it moves to a screen of another density, which
+    // leaves the box's size alone, so the resize observer never hears of it.
+    let ratioQuery: MediaQueryList | null = null;
+    function watchRatio() {
+        ratioQuery?.removeEventListener('change', onRatio);
+        ratioQuery = matchMedia(`(resolution: ${window.devicePixelRatio}dppx)`);
+        ratioQuery.addEventListener('change', onRatio);
+    }
+    function onRatio() {
+        watchRatio();
+        resize();
     }
 
     const boxFor = (workspaceId: string): Box | null => {
@@ -1004,6 +1026,7 @@ export function createTank(canvas: HTMLCanvasElement, options: TankOptions): Tan
 
     const observer = new ResizeObserver(resize);
     observer.observe(parent);
+    watchRatio();
     resize();
     frame = requestAnimationFrame(tick);
 
@@ -1041,6 +1064,7 @@ export function createTank(canvas: HTMLCanvasElement, options: TankOptions): Tan
         dispose() {
             cancelAnimationFrame(frame);
             observer.disconnect();
+            ratioQuery?.removeEventListener('change', onRatio);
             canvas.removeEventListener('wheel', onWheel);
             canvas.removeEventListener('pointermove', onMove);
             canvas.removeEventListener('pointerleave', onLeave);
