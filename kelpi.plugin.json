@@ -32,6 +32,10 @@
       {
         "id": "dita.kelp-tank.agent-book",
         "title": "Kelp Tank: Background agents"
+      },
+      {
+        "id": "dita.kelp-tank.activity",
+        "title": "Kelp Tank: Session activity"
       }
     ],
     "cli": [

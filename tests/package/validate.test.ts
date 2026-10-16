@@ -60,6 +60,7 @@ describe('the built package', () => {
             'dita.kelp-tank.quiet',
             'dita.kelp-tank.hook',
             'dita.kelp-tank.agent-book',
+            'dita.kelp-tank.activity',
         ]);
     });
 

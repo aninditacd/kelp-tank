@@ -1,4 +1,4 @@
-import { applyAgentEvent, applyToolEvent } from './activity';
+import { applyAgentEvent, applyToolEvent, readActivity, seedActivity } from './activity';
 import { dropExpired, EMPTY_BOOK, hasAgents, readBook, type AgentBook } from './agents';
 import { decideTank } from './decide-tank';
 import type { AgentHookEvent, PluginEvent, Snapshot, ViewApi } from './kelpi-api';
@@ -16,6 +16,8 @@ const BOOK_COMMAND = 'dita.kelp-tank.agent-book';
 const BOOK_EVENT = 'dita.kelp-tank.agents';
 /** The event the backend sends for each hook call: a tool or subagent starting or finishing. */
 const HOOK_EVENT = 'dita.kelp-tank.hook';
+/** The backend command that answers each pane's running tools and doze. */
+const ACTIVITY_COMMAND = 'dita.kelp-tank.activity';
 /** How long a snapshot waits for the backend's answers before going on without them. */
 const QUIET_WAIT_MS = 3000;
 /** While any agent is in the book, the tank re-decides this often, so a timed-out baby fish leaves. */
@@ -39,7 +41,9 @@ const BABY_CHECK_MS = 30 * 1000;
  * higher `revision` wins. A failed request gives no baby fish and no error: the hook is optional.
  *
  * Each `dita.kelp-tank.hook` event, and Kelpi's own `agent.event`, updates what a creature is
- * doing and whether it dozes (src/activity.ts). These live in the world, so a snapshot forgets them.
+ * doing and whether it dozes (src/activity.ts). The backend keeps the same record, so a snapshot
+ * seeds the world from its answer. The answer names the last event it covers; a buffered event at
+ * or before that, in the same epoch, is already in it and does not change the activity again.
  */
 export function startLiveTank(
     kelpi: LiveKelpi,
@@ -61,6 +65,8 @@ export function startLiveTank(
     let quiet: ReadonlySet<string> = new Set();
     let book: AgentBook = EMPTY_BOOK;
     let babyCheck: ReturnType<typeof setInterval> | null = null;
+    // The last event sequence the backend's activity answer already includes; -1 for none.
+    let activityCovered = -1;
     // Set by `stop`, so a snapshot still on its way afterwards starts no timer and draws nothing.
     let stopped = false;
 
@@ -100,12 +106,13 @@ export function startLiveTank(
         if (event.name === 'agent.event' && event.pluginID === undefined) {
             const data = event.data as AgentHookEvent;
             quiet = quietAfter(quiet, data);
-            world = applyAgentEvent(world, data);
+            if (event.sequence > activityCovered) world = applyAgentEvent(world, data);
             tank = decide(tank);
             onState(tank);
             return;
         }
         if (event.name === HOOK_EVENT && event.pluginID === 'dita.kelp-tank') {
+            if (event.sequence <= activityCovered) return;
             const next = applyToolEvent(world, event.data);
             if (next === world) return;
             world = next;
@@ -156,19 +163,21 @@ export function startLiveTank(
         kelpi
             .snapshot()
             .then(async (snapshot: Snapshot) => {
-                const [panes, answeredBook] = await Promise.all([
+                const [panes, answeredBook, activity] = await Promise.all([
                     quietPanes(),
                     ask(BOOK_COMMAND, readBook, EMPTY_BOOK),
+                    ask(ACTIVITY_COMMAND, readActivity, readActivity(undefined)),
                 ]);
-                return { snapshot, panes, answeredBook };
+                return { snapshot, panes, answeredBook, activity };
             })
             .then(
-                ({ snapshot, panes, answeredBook }) => {
+                ({ snapshot, panes, answeredBook, activity }) => {
                     if (stopped) return;
                     pending = null;
                     epoch = snapshot.epoch;
                     sequence = snapshot.sequence;
-                    world = worldFromSnapshot(snapshot.state);
+                    world = seedActivity(worldFromSnapshot(snapshot.state), activity.panes);
+                    activityCovered = activity.epoch === snapshot.epoch ? activity.sequence : -1;
                     quiet = new Set(panes);
                     if (answeredBook.revision > book.revision) book = answeredBook;
                     watchBabies();
