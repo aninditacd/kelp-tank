@@ -89,6 +89,18 @@ describe('where a creature starts on a new page', () => {
         });
     });
 
+    it('a remembered update creature comes back where it was, not at the glass', () => {
+        const entrance = entranceFor(
+            'p1',
+            { kind: 'update' },
+            true,
+            remembered([['p1', AT]]),
+            BOX,
+            MARGIN,
+        );
+        expect(entrance).toEqual({ kind: 'at', pos: AT });
+    });
+
     it('with nothing remembered, every fish starts on its ledge', () => {
         expect(entranceFor('p1', SWIM, true, null, BOX, MARGIN)).toEqual({ kind: 'inLedge' });
         expect(entranceFor('p1', { kind: 'drift' }, true, null, BOX, MARGIN)).toEqual({
@@ -136,6 +148,11 @@ describe('saving the memory', () => {
             x: -0.43,
             y: 6.79,
         });
+    });
+
+    it('the saved tank memory holds only fish and view, whatever state the creatures are in', () => {
+        const saved = memoryOf(snapshot([['quiet', AT]]));
+        expect(Object.keys(saved).sort()).toEqual(['fish', 'view']);
     });
 
     it('a creature swimming away is not remembered', () => {

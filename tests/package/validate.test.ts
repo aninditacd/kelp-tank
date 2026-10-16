@@ -49,6 +49,7 @@ describe('the built package', () => {
         ]);
         expect(manifest.contributes.commands.map((command) => command.id)).toEqual([
             'dita.kelp-tank.summary',
+            'dita.kelp-tank.quiet',
         ]);
     });
 });

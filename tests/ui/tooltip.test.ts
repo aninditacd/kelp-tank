@@ -31,4 +31,8 @@ describe('tooltipText', () => {
             expect(t.detail).toBe(`Lagoon · ${label}`);
         }
     });
+
+    it("an update creature's hover text says Update", () => {
+        expect(tooltipText(make('update'), WORKSPACE).detail).toBe('Lagoon · Update');
+    });
 });

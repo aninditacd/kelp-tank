@@ -331,3 +331,56 @@ describe('the decider on hand-built worlds', () => {
         }
     });
 });
+
+describe('the decider and quiet panes', () => {
+    it('a quiet waiting fish shows update', () => {
+        const world = handBuilt([livePane('p1', 'A', 'kelp-tank')]);
+        const tank = decideTank(world, null, undefined, new Set(['p1']));
+        expect(tank.sessions[0].state).toBe('update');
+        expect(decideTank(world, null).sessions[0].state).toBe('wantsYou');
+    });
+
+    it('a quiet waiting rail still relays to its conductor', () => {
+        const tank = decideTank(
+            handBuilt([
+                livePane('c', 'A', 'conducting-lighthouse', { status: 'running' }),
+                livePane('r', 'A', 'lh-deps-1013-rail-a'),
+            ]),
+            null,
+            undefined,
+            new Set(['r']),
+        );
+        expect(tank.sessions.find((s) => s.paneId === 'r')).toMatchObject({
+            role: 'rail',
+            state: 'wantsYou',
+            relaysTo: 'c',
+        });
+    });
+
+    it('a quiet pane that is running again is working, and an idle one is idle', () => {
+        const running = decideTank(
+            handBuilt([livePane('p1', 'A', 'kelp-tank', { status: 'running' })]),
+            null,
+            undefined,
+            new Set(['p1']),
+        );
+        expect(running.sessions[0].state).toBe('working');
+        const idle = decideTank(
+            handBuilt([livePane('p1', 'A', 'kelp-tank', { status: 'idle' })]),
+            null,
+            undefined,
+            new Set(['p1']),
+        );
+        expect(idle.sessions[0].state).toBe('idle');
+    });
+
+    it('a closed quiet session is closed', () => {
+        const tank = decideTank(
+            handBuilt([livePane('p1', 'A', 'kelp-tank', { agentSessionId: null })]),
+            null,
+            undefined,
+            new Set(['p1']),
+        );
+        expect(tank.sessions[0].state).toBe('closed');
+    });
+});

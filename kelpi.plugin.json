@@ -20,6 +20,10 @@
       {
         "id": "dita.kelp-tank.summary",
         "title": "Kelp Tank: Workspace summary"
+      },
+      {
+        "id": "dita.kelp-tank.quiet",
+        "title": "Kelp Tank: Quiet sessions"
       }
     ],
     "settings": {}

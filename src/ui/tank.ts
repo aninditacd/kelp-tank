@@ -36,12 +36,13 @@ import {
     nudgePoint,
     speedFor,
     swimPoint,
+    updatePose,
     type Box,
     type Vec3,
 } from './behaviour';
 import { kelpTint, workspaceHex } from './colors';
 import { type Creature, makeCreature, NOSE } from './creatures';
-import { type AlertFx, makeAlertFx, makeRipple } from './effects';
+import { type AlertFx, makeAlertFx, makeRipple, makeTickFx, type TickFx } from './effects';
 import { DEPTH, layoutTank, PX_PER_UNIT, type TankLayout } from './layout';
 import { entranceFor, openingView, type TankMemory, type TankSnapshot } from './memory';
 import { pickPaneId } from './pick';
@@ -159,7 +160,13 @@ interface Swimmer extends Creature {
     side: -1 | 1;
     gone: boolean;
     fx: AlertFx;
+    /** The update creature's tick, and the clock time its update began (null until it steps). */
+    tick: TickFx;
+    updateT: number | null;
 }
+
+/** The goals that put a creature at the front glass. */
+const atGlass = (goal: Goal) => goal.kind === 'glass' || goal.kind === 'update';
 
 function lerpAngle(a: number, b: number, t: number): number {
     let d = ((b - a + Math.PI) % (Math.PI * 2)) - Math.PI;
@@ -467,6 +474,9 @@ export function createTank(canvas: HTMLCanvasElement, options: TankOptions): Tan
                     side: 1,
                     gone: false,
                     fx: makeAlertFx(),
+                    tick: makeTickFx(),
+                    // A page that opens on an update shows it already rested, with no tick.
+                    updateT: !settled && goal.kind === 'update' ? -Infinity : null,
                 };
                 const entrance = restoreAt
                     ? null
@@ -501,7 +511,7 @@ export function createTank(canvas: HTMLCanvasElement, options: TankOptions): Tan
                     c.goal = { kind: 'swim' };
                 }
                 c.yaw = c.pos.x > 0 ? Math.PI : 0;
-                scene.add(c.group, c.fx.bubble, c.fx.glow);
+                scene.add(c.group, c.fx.bubble, c.fx.glow, c.tick);
                 swimmers.set(s.paneId, c);
             }
             if (box) {
@@ -513,8 +523,8 @@ export function createTank(canvas: HTMLCanvasElement, options: TankOptions): Tan
                 c.tapping = false;
                 c.retarget = 0;
             }
-            if (goal.kind === 'glass' && (c.goal.kind !== 'glass' || c.spot === null))
-                glassTarget(c);
+            if (goal.kind !== 'update') c.updateT = null;
+            if (atGlass(goal) && (!atGlass(c.goal) || c.spot === null)) glassTarget(c);
             c.goal = goal;
             if (goal.kind === 'leave' && !c.leaving) {
                 c.leaving = true;
@@ -542,14 +552,15 @@ export function createTank(canvas: HTMLCanvasElement, options: TankOptions): Tan
             const limit = layout.width / 2 - 0.05;
             c.pos.x = Math.max(-limit, Math.min(limit, c.pos.x));
             c.retarget = 0;
-            if (c.goal.kind === 'glass') glassTarget(c);
+            if (atGlass(c.goal)) glassTarget(c);
         }
     }
 
     function removeSwimmer(c: Swimmer) {
-        scene.remove(c.group, c.fx.bubble, c.fx.glow);
+        scene.remove(c.group, c.fx.bubble, c.fx.glow, c.tick);
         c.fx.bubble.material.dispose();
         c.fx.glow.material.dispose();
+        c.tick.material.dispose();
         swimmers.delete(c.paneId);
     }
 
@@ -559,15 +570,22 @@ export function createTank(canvas: HTMLCanvasElement, options: TankOptions): Tan
         const margin = marginOf(c, 1.3);
         const leader =
             goal.kind === 'nudge' || goal.kind === 'follow' ? swimmers.get(goal.leader) : undefined;
-        let speed = speedFor(c.role, goal);
+        // An update creature waits at the glass while its tick shows, then rests like an idle one.
+        const pose = goal.kind === 'update' ? updatePose(t - (c.updateT ??= t)) : null;
+        const toGlass = goal.kind === 'glass' || pose?.at === 'glass';
+        const drifting = goal.kind === 'drift' || pose?.at === 'drift';
+        let speed = speedFor(c.role, pose?.at === 'drift' ? { kind: 'drift' } : goal);
         const aim = (p: Vec3) => c.target.set(p.x, p.y, p.z);
 
         if (c.leaving) {
             aim(exitPoint(c.pos, world));
             if (isGone(c.pos, world)) c.gone = true;
-        } else if (goal.kind === 'glass' && c.spot) {
+        } else if (toGlass && c.spot) {
             c.target.copy(c.spot);
-            if (!c.tapping && c.pos.distanceTo(c.spot) < 0.03) c.tapping = true;
+            // Only a creature asking for the owner taps; an update just waits at the glass.
+            if (goal.kind === 'glass' && !c.tapping && c.pos.distanceTo(c.spot) < 0.03) {
+                c.tapping = true;
+            }
         } else if (goal.kind === 'nudge') {
             c.tapping = false;
             if (leader) {
@@ -581,7 +599,6 @@ export function createTank(canvas: HTMLCanvasElement, options: TankOptions): Tan
                     : new Vector3(Math.cos(leader.yaw), 0, -Math.sin(leader.yaw));
             aim(followPoint(leader.pos, heading, goal.slot));
         } else {
-            const drifting = goal.kind === 'drift';
             c.retarget -= dt;
             if (c.retarget <= 0 || c.pos.distanceTo(c.target) < (drifting ? 0.05 : 0.08)) {
                 aim(
@@ -633,13 +650,13 @@ export function createTank(canvas: HTMLCanvasElement, options: TankOptions): Tan
         c.group.rotation.set(0, c.yaw, MathUtils.clamp(c.vel.y * 1.5, -0.5, 0.5));
 
         const excited = c.tapping ? 1.6 : 1;
-        const rate = (goal.kind === 'drift' ? 3 : 6 + speed * 18) * excited;
+        const rate = (drifting ? 3 : 6 + speed * 18) * excited;
         if (c.tail) c.tail.rotation.y = Math.sin(t * rate + c.phase) * 0.4;
         c.fins?.forEach((fin, i) => {
             fin.rotation.x = (i ? -1 : 1) * Math.sin(t * rate * 0.6 + c.phase) * 0.5;
         });
         if (c.front && c.back && c.head) {
-            const flap = (goal.kind === 'drift' ? 1.2 : 2.4) * excited;
+            const flap = (drifting ? 1.2 : 2.4) * excited;
             c.front.forEach((fl, i) => {
                 fl.rotation.x = (i ? -1 : 1) * Math.sin(t * flap + c.phase) * 0.55;
             });
@@ -669,6 +686,18 @@ export function createTank(canvas: HTMLCanvasElement, options: TankOptions): Tan
                 c.pos.z,
             );
             fx.bubble.material.opacity = a;
+        }
+        const tickAmount = pose && !c.leaving ? pose.tick : 0;
+        c.tick.visible = tickAmount > 0.01;
+        if (c.tick.visible) {
+            const size = 0.17 * (0.7 + 0.3 * tickAmount);
+            c.tick.scale.set(size, size, 1);
+            c.tick.position.set(
+                c.pos.x + 0.04,
+                Math.min(c.pos.y + c.scale * 1.15 + 0.08, layout.height - 0.1),
+                c.pos.z,
+            );
+            c.tick.material.opacity = tickAmount;
         }
         fx.glow.visible = show;
         if (show) {

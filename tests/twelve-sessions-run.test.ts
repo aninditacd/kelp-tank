@@ -63,6 +63,7 @@ async function replay(): Promise<TankState[]> {
                 },
             },
             ui: { focusPane: () => Promise.resolve(), onChrome: () => () => {} },
+            commands: { execute: () => Promise.resolve({ panes: [] }) as never },
         },
         (state) => states.push(state),
         (error) => {
@@ -72,6 +73,8 @@ async function replay(): Promise<TankState[]> {
     await Promise.resolve();
     await Promise.resolve();
     for (const event of events) deliver(event);
+    // Events wait behind the backend's answer; let it arrive and the buffer apply.
+    await new Promise((resolve) => setImmediate(resolve));
     return states;
 }
 

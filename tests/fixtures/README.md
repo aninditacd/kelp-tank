@@ -78,3 +78,25 @@ Every session is a real `claude -n <name>` in a pane of the instance. Claude the
 | `garden`, `radio`, `quiet` | Garden, Radio, Quiet | fish | ended |
 
 The sidebar at the end, read with `workspace list`: Default, Lagoon, Radio, Kelp, Ops, Harbour, Lighthouse, Notes, Garden, Quiet.
+
+# Footer run
+
+`update-footer-run.jsonl` was captured on 16 Oct 2026 by Rail H, from Kelpi's private instance at Kelpi tag `v0.2.19`, with `kelpi plugin watch`. Line 1 is the snapshot (sequence 38). Only `state.changed` and `agent.event` lines are kept, from two watches that were joined (the second began at sequence 309). The stream also carried `daemon.system-stats`, `daemon.notification` and `daemon.attention-request` lines, which were left out whole. Paths were scrubbed by exact string replacement: the scratch folder is `/srv/demo/harbour`, Claude's transcript folder is `/srv/demo/.claude/projects/harbour`, and the home folder is `/srv/demo/home`. No other line was altered.
+
+It feeds the "Awaiting you" footer rule (`src/quiet.ts`). All panes are in one workspace, Harbour, and every reply text is made up: the prompts told Claude exactly what to say.
+
+**What was real Claude Code and what was driven.** Claude Code 2.1.301 is not logged in inside the instance's own panes, so a reply cannot be typed there. Each real reply came from a real `claude -p --model haiku` run in a scratch folder, with `--setting-sources project --settings <scratch file>` and `KELPI_PANE_ID` set to the pane. The scratch settings file ran Kelpi's own hook command (`kelpi event session-start|start|stop|notification|session-end --agent claude`) for Claude's `SessionStart`, `UserPromptSubmit`, `Stop`, `Notification` and `SessionEnd` hooks, against the instance's socket only. The daemon produced every event from that real hook call, and `lastAssistantMessage` is the text of Claude's real final reply.
+
+| Pane label | Stop at | What happened | Real or driven |
+| --- | --- | --- | --- |
+| `update-fish` | 137, 260 | A reply ending `Awaiting you: 0 - nothing`. At 283 an `idle_prompt` notification follows the second one. | Replies real. The `idle_prompt` was driven. |
+| `ask-fish` | 155 | A reply ending `Awaiting you: 2 - a mooring choice and a go`. | Real. |
+| `plain-fish` | 170 | A reply with no footer. | Real. |
+| `quote-fish` | 183, 204 | 183 is a reply that is only the footer line. 204 quotes the footer on its second line, with a line of prose after it. | Real. |
+| `perm-fish` | 221, 237, 274 | 221 and 274 end `Awaiting you: 0`. 237 is a real reply with no footer, from a turn that asked for a `touch` that `claude -p` denied. After 274, a `start` (287) and a `permission_prompt` notification (292). | Replies real. The `start` and the `permission_prompt` were driven. |
+| `long-fish` | 301, 318 | 301 is a stop that carried no reply text: its 75 KB stdin timed out in Kelpi's CLI, so the daemon saw a stop without a reply. 318 is a made-up 75 KB reply ending `Awaiting you: 0`, which Kelpi's CLI cut at 64 KiB and marked `lastAssistantMessageTruncated`. | Driven: both came from `kelpi event stop` with Claude-shaped stdin. |
+
+**Why driving is faithful.** Driving runs the same `kelpi event` command Claude's hook runs, with the same stdin keys, into the same daemon, so the `agent.event` the plugin hears is built by the same code. It is driven only where a real turn cannot make the event: `claude -p` denies a tool silently and raises no `permission_prompt`, Claude's `idle_prompt` fires only after a minute of waiting in an interactive session, and a real 64 KiB reply is impractical.
+
+**What the run showed about ordering.** A stop is not always the very next sequence after its pane's status change. Kelpi publishes the status change, then at most a `daemon.notification` and a title update, then the stop; the run's stops follow their status change by one to three sequences, with no other hook event between. `tests/quiet.test.ts` checks that.
+

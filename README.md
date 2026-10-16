@@ -6,7 +6,7 @@ Kelp Tank is a plugin for [Kelpi](https://github.com/benfriebe/kelpi), the termi
 
 - Each Kelpi workspace gets a rock ledge with its name, its shortcut and kelp in its colour.
 - A session is a round fish. A session named after a day, such as `wed-15-10-2026`, is a turtle. A name containing `conduct` is a pufferfish with a crown, and a name ending in `rail-a`, `rail-b` and so on, or a handover such as `rail-r2`, is a tiny fish that follows its conductor.
-- A working session swims around its ledge, and an idle one drifts slowly near it. A session waiting for you swims to the glass, glows and shows a "!" bubble. A waiting rail nudges its conductor instead, and a muted workspace never glows.
+- A working session swims around its ledge, and an idle one drifts slowly near it. A session waiting for you swims to the glass, glows and shows a "!" bubble. A session whose last reply ends `Awaiting you: 0` is only an update: it swims to the glass, wears a small tick for a moment, then rests. A waiting rail nudges its conductor instead, and a muted workspace never glows.
 - Click a creature to jump to its session. Pinch, ⌘-scroll or the + and − buttons zoom; plain scrolling moves around a tall tank. The menu hides workspaces.
 
 ## Install
@@ -19,7 +19,7 @@ Needs Kelpi 0.2.19 or later.
    - Or run `kelpi plugin install kelp-tank.kelpi-plugin --trust` in a Kelpi terminal.
 3. Show the tank in a sidebar with **Settings → Plugins → Workbench views**, or open it as a pane with `kelpi plugin open dita.kelp-tank dita.kelp-tank.home`.
 
-**What trust means.** A Kelpi plugin's backend runs on your computer with your account's access, like any app you install. Kelp Tank's backend only lists your workspaces. Its view reads your workspaces and sessions, saves its own settings in Kelpi, and focuses the pane you click. Install it only if you are happy to run its code, or read the source first.
+**What trust means.** A Kelpi plugin's backend runs on your computer with your account's access, like any app you install. Kelp Tank's backend lists your workspaces and listens to Kelpi's agent events. It reads the last line of each Claude reply to see whether it ends `Awaiting you: 0`, and keeps only which sessions that is true for, in memory. It never stores, logs or sends the reply. Its view reads your workspaces and sessions, saves its own settings in Kelpi, and focuses the pane you click. Install it only if you are happy to run its code, or read the source first.
 
 ## Build from source
 

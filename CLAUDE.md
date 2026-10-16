@@ -20,8 +20,9 @@ TypeScript stays on 6.0 because `typescript-eslint` 8.71 does not support TypeSc
 - `src/ui/view.ts` - pure zoom and scroll maths: the reset view, zoom around the pointer, scrolling, wheel input and the camera. `src/ui/hidden.ts` - pure: which workspaces the tank draws, the menu's rows, the hidden-waiting dot, and the hidden set in Kelpi plugin storage (`hiddenWorkspaces`). Both are unit-tested in `tests/ui/`.
 - `src/ui/memory.ts` - pure: where each creature starts on a new page and the view it opens at, from what the tank remembered in Kelpi plugin storage (`tankMemory`). Kelpi rebuilds a sidebar view's page on every workspace switch and gives a sidebar no view state, so this is how the tank keeps its state. Unit-tested in `tests/ui/memory.test.ts`.
 - `src/ui/workspace-menu.ts` - the corner menu's DOM, drawn from `hidden.ts`. Not unit-tested: DOM only.
+- `src/quiet.ts` - pure: `awaitingCount(reply)` reads the `Awaiting you: <n>` footer from a reply's last non-empty line, and `quietAfter(quiet, event)` keeps the set of panes whose last reply ended `Awaiting you: 0`. The backend (`src/backend.ts`) keeps that set in memory from `api.agents.onEvent` and answers the `dita.kelp-tank.quiet` command with it; the view asks after every snapshot and also applies Kelpi's `agent.event` events. Reply text is never stored, logged or sent. Unit-tested in `tests/quiet.test.ts`.
 - `src/kelpi-world.ts` - Kelpi's workspaces and panes as plain data, built from a snapshot and kept current by applying `state.changed` events.
-- `src/decide-tank.ts` - `decideTank(world, previous)`, the pure decider that turns the world into a `TankState`: creature, state, ledges, relaying.
+- `src/decide-tank.ts` - `decideTank(world, previous, chords, quiet)`, the pure decider that turns the world into a `TankState`: creature, state (`update` for a waiting, quiet, non-rail pane), ledges, relaying.
 - `src/shortcuts.ts` - each workspace's ⌘ shortcut, numbered by Kelpi's visible sidebar order with chords from its live keymap, and `ledgeLabel`, the text on a ledge.
 - `src/live-tank.ts` - `startLiveTank(kelpi, onState, onError)`, run by the view: keeps the `TankState` current from Kelpi's pushed events, resnapshots on a `gap` or a new epoch, and `jump(paneId)` focuses a session's pane.
 - `src/kelpi-api.ts` - the slice of Kelpi's plugin API this plugin calls, copied from Kelpi's SDK at tag `v0.2.19` (the SDK is not on npm).
@@ -62,4 +63,5 @@ A plugin backend does hear Kelpi's session events, pushed through `api.events.on
 - The real run is `tests/fixtures/private-instance-run.jsonl`; `tests/fixtures/README.md` explains it. Test new logic against it.
 - `docs/prd.md`, "Answered questions", records where the session name lives (the pane `title`, after a status prefix), focus from a plugin, and the frame rate.
 - `src/tank-state.ts` is the shared shape the decider produces and the scene consumes.
+- `tests/fixtures/update-footer-run.jsonl` is the second recorded run: real Claude replies for the footer rule, from Kelpi 0.2.19. `tests/fixtures/README.md` says which lines were driven.
 - `probes/tank-probe/` is the throwaway plugin that measured all this. It is not part of Kelp Tank.

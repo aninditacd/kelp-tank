@@ -120,6 +120,11 @@ describe('the dot on the menu button', () => {
         expect(hiddenWantsYou(closed, new Set(['b']))).toBe(true);
     });
 
+    it('an update creature never lights the dot', () => {
+        const quiet = waiting([session('b3', 'b', 'fish', 'update')]);
+        expect(hiddenWantsYou(quiet, new Set(['b']))).toBe(false);
+    });
+
     it('a muted workspace never lights the dot', () => {
         const muted = { ...B, muted: true };
         const state = waiting([session('b3', 'b', 'fish', 'wantsYou')], [A, muted, C]);

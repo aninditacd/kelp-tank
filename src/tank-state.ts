@@ -33,10 +33,11 @@ export type SessionRole = 'day' | 'conductor' | 'rail' | 'fish';
 
 /**
  * Kelpi's `running` is `working`, `waitingForInput` is `wantsYou`, and `idle` is `idle`.
- * `closed` means the pane closed or its Claude session ended. Kelpi leaves an ended session's pane
+ * `update` is a waiting session whose last reply said nothing waits on the owner (its footer
+ * is `Awaiting you: 0`); it never glows. `closed` means the pane closed or its Claude session ended. Kelpi leaves an ended session's pane
  * in `waitingForInput`, so read the ended session from its cleared session id (see docs/prd.md).
  */
-export type SessionState = 'working' | 'wantsYou' | 'idle' | 'closed';
+export type SessionState = 'working' | 'wantsYou' | 'update' | 'idle' | 'closed';
 
 /** One Claude or Codex session in a Kelpi pane. */
 export interface TankSession {
