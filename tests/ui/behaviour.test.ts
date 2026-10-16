@@ -9,6 +9,7 @@ import {
     followPoint,
     glassSpot,
     isGone,
+    heldActivity,
     isTired,
     nudgePoint,
     restPoint,
@@ -16,6 +17,7 @@ import {
     swimPoint,
     TICK_FADE,
     TICK_HOLD,
+    PROP_HOLD_S,
     TIRED_AFTER_MS,
     updatePose,
 } from '../../src/ui/behaviour';
@@ -327,6 +329,28 @@ describe('tired and dozing', () => {
         it('keeps the resting spot inside the side margins', () => {
             expect(restPoint(box, 0.1, { x: 5, y: 1, z: 0 }).x).toBeCloseTo(0.9);
             expect(restPoint(box, 0.1, { x: -5, y: 1, z: 0 }).x).toBeCloseTo(-0.9);
+        });
+    });
+});
+
+describe('heldActivity', () => {
+    it('a new activity shows at once and holds for PROP_HOLD_S', () => {
+        expect(heldActivity({ activity: 'read', until: 0 }, 'command', 10)).toEqual({
+            activity: 'command',
+            until: 10 + PROP_HOLD_S,
+        });
+    });
+
+    it('a finished tool keeps its prop until the hold runs out, then drops it', () => {
+        const shown = { activity: 'edit' as const, until: 11 };
+        expect(heldActivity(shown, null, 10.9)).toBe(shown);
+        expect(heldActivity(shown, null, 11)).toEqual({ activity: null, until: 11 });
+    });
+
+    it('nothing shown and nothing running stays empty', () => {
+        expect(heldActivity({ activity: null, until: 0 }, null, 5)).toEqual({
+            activity: null,
+            until: 0,
         });
     });
 });

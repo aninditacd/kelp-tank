@@ -1,3 +1,4 @@
+import type { Activity } from '../activity';
 import type { SessionRole, TankSession, TankState } from '../tank-state';
 
 export interface Vec3 {
@@ -245,4 +246,21 @@ export function restPoint(box: Box, margin: number, from: Vec3): Vec3 {
         y: box.y0,
         z: from.z,
     };
+}
+
+/** Seconds a prop stays after its tool finishes, so a run of quick tool calls does not flicker. */
+export const PROP_HOLD_S = 1;
+
+/**
+ * The prop to show at clock time `t` (seconds), given what shows now and the session's activity.
+ * A running tool shows at once; once it finishes, its prop holds until `until`, then goes.
+ */
+export function heldActivity(
+    shown: { activity: Activity | null; until: number },
+    next: Activity | null,
+    t: number,
+): { activity: Activity | null; until: number } {
+    if (next !== null) return { activity: next, until: t + PROP_HOLD_S };
+    if (shown.activity === null || t < shown.until) return shown;
+    return { activity: null, until: shown.until };
 }

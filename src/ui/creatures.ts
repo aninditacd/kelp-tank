@@ -7,6 +7,7 @@ import {
     Group,
     Mesh,
     MeshBasicMaterial,
+    SphereGeometry,
     Vector3,
 } from 'three';
 import type { SessionRole, TankSession } from '../tank-state';
@@ -17,6 +18,8 @@ const CONE5 = new ConeGeometry(1, 1, 5);
 const WHITE = new MeshBasicMaterial({ color: 0xffffff });
 const BLACK = new MeshBasicMaterial({ color: 0x1b1b2a });
 const PINK = new MeshBasicMaterial({ color: 0xff9fb5, transparent: true, opacity: 0.8 });
+/** An eyelid: the top half of a sphere, swung down over the eye to close it. */
+const HEMI = new SphereGeometry(1, 20, 10, 0, Math.PI * 2, 0, Math.PI / 2);
 
 /** How big each creature is, and how far its nose reaches ahead of its centre (in its own units). */
 export const SIZE: Record<SessionRole, number> = {
@@ -42,9 +45,21 @@ export interface Creature {
     back?: Group[];
     /** World size scale, so `SIZE[role]`. */
     scale: number;
+    /** One lid per eye, hidden while open. `setLids` closes them. */
+    lids: Mesh[];
+    /** How far the top of the body sits above its centre, in the creature's own units. */
+    top: number;
 }
 
-function eyes(g: Group, x: number, y: number, z: number, r: number) {
+/** Closes every lid of `creature` by `closure`: 0 open (hidden), 0.5 half shut, 1 asleep. */
+export function setLids(creature: Creature, closure: number) {
+    for (const lid of creature.lids) {
+        lid.visible = closure > 0.02;
+        lid.rotation.set((lid.userData.side as number) * (-Math.PI / 2 + closure * Math.PI), 0, 0);
+    }
+}
+
+function eyes(g: Group, x: number, y: number, z: number, r: number, lidHex: string, lids: Mesh[]) {
     for (const s of [1, -1]) {
         g.add(
             blob(WHITE, r, r, r)
@@ -67,6 +82,13 @@ function eyes(g: Group, x: number, y: number, z: number, r: number) {
                 .translateY(y + h.y + r * 0.22)
                 .translateZ(z * s + h.z),
         );
+        const lid = new Mesh(HEMI, toon(lidHex));
+        lid.scale.setScalar(r * 1.22);
+        lid.position.set(x, y, z * s);
+        lid.userData.side = s;
+        lid.visible = false;
+        g.add(lid);
+        lids.push(lid);
     }
 }
 
@@ -95,6 +117,7 @@ function at<T extends Mesh>(mesh: T, x: number, y: number, z: number): T {
 
 function buildFish(color: string, eyeRadius = 0.27) {
     const g = new Group();
+    const lids: Mesh[] = [];
     const body = toon(color);
     const belly = toon(mix(color, '#ffffff', 0.55));
     const fin = toon(mix(color, '#ffffff', 0.25));
@@ -113,14 +136,15 @@ function buildFish(color: string, eyeRadius = 0.27) {
         g.add(f);
         fins.push(f);
     }
-    eyes(g, 0.72, 0.22, 0.5, eyeRadius);
+    eyes(g, 0.72, 0.22, 0.5, eyeRadius, color, lids);
     for (const s of [1, -1]) g.add(at(blob(PINK, 0.16, 0.08, 0.03), 0.62, -0.12, 0.71 * s));
     g.add(at(blob(BLACK, 0.05, 0.035, 0.12), 1.19, -0.12, 0));
-    return { group: g, tail, fins };
+    return { group: g, tail, fins, lids, top: 1.0 };
 }
 
 function buildPuffer(color: string) {
     const g = new Group();
+    const lids: Mesh[] = [];
     const body = toon(color);
     const belly = toon(mix(color, '#ffffff', 0.55));
     const spike = toon(mix(color, '#ffffff', 0.35));
@@ -152,7 +176,7 @@ function buildPuffer(color: string) {
         g.add(f);
         fins.push(f);
     }
-    eyes(g, 0.6, 0.25, 0.62, 0.33);
+    eyes(g, 0.6, 0.25, 0.62, 0.33, color, lids);
     for (const s of [1, -1]) g.add(at(blob(PINK, 0.15, 0.08, 0.03), 0.6, -0.17, 0.78 * s));
     g.add(at(blob(BLACK, 0.07, 0.07, 0.1), 0.99, -0.14, 0));
     // The conductor's tiny crown.
@@ -175,11 +199,12 @@ function buildPuffer(color: string) {
         );
     }
     g.add(crown);
-    return { group: g, tail, fins };
+    return { group: g, tail, fins, lids, top: 1.35 };
 }
 
 function buildTurtle(color: string) {
     const g = new Group();
+    const lids: Mesh[] = [];
     const shell = toon(color);
     const spot = toon(mix(color, '#ffffff', 0.45));
     const skin = toon('#a6dcae');
@@ -199,7 +224,7 @@ function buildTurtle(color: string) {
     const head = new Group();
     head.position.set(1.0, 0.05, 0);
     head.add(at(blob(skin, 0.45, 0.38, 0.38), 0.3, 0.05, 0));
-    eyes(head, 0.5, 0.2, 0.22, 0.15);
+    eyes(head, 0.5, 0.2, 0.22, 0.15, '#a6dcae', lids);
     for (const s of [1, -1]) head.add(at(blob(PINK, 0.08, 0.045, 0.02), 0.5, 0, 0.34 * s));
     head.add(at(blob(BLACK, 0.05, 0.02, 0.1), 0.74, -0.02, 0));
     g.add(head);
@@ -220,7 +245,7 @@ function buildTurtle(color: string) {
         back.push(b);
     }
     g.add(cone(CONE4, skin, 0.12, 0.3, 0.08, -1.12, 0, 0, Math.PI / 2));
-    return { group: g, head, front, back };
+    return { group: g, head, front, back, lids, top: 0.75 };
 }
 
 /** Builds the creature for a session, tinted with its workspace's colour, tagged with its pane id. */
