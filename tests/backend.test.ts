@@ -280,6 +280,38 @@ describe('the activity command', () => {
         expect(await activity(handlers)).toMatchObject({ epoch: 'e1', sequence: 102 });
     });
 
+    it('a hook event sent late keeps the higher sequence it already covers', async () => {
+        const { api, handlers, hear, emit } = fakeApi();
+        activate(api);
+        let send: (event: PluginEvent) => void = () => {};
+        emit.mockImplementationOnce(
+            (name: string, data?: unknown) =>
+                new Promise((resolve) => {
+                    send = () =>
+                        resolve({
+                            epoch: 'e1',
+                            sequence: 100,
+                            name,
+                            data,
+                            pluginID: 'dita.kelp-tank',
+                        });
+                }) as never,
+        );
+        await handlers.get('dita.kelp-tank.hook')!(tool('PreToolUse', 'Bash'), PANE);
+        // Kelpi numbered the hook event 100, but an agent event (101) reached the backend first.
+        hear({
+            type: 'notification',
+            notificationType: 'idle_prompt',
+            sessionID: 's2',
+            paneID: 'p2',
+        });
+        send({} as PluginEvent);
+        await settle();
+        const answer = await activity(handlers);
+        expect(answer.sequence).toBe(101);
+        expect(answer.panes.p1).toEqual({ sessionId: 's1', tools: ['Bash'], dozing: false });
+    });
+
     it('the backend never stores activity', async () => {
         const { api, handlers, hear, storageSet } = fakeApi();
         activate(api);
