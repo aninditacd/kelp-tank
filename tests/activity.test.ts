@@ -137,6 +137,7 @@ describe('applyToolEvent', () => {
             hook('PostToolUse', null),
             hook('PreToolUse', 'Bash', { paneID: undefined }),
             hook('PreToolUse', 'Bash', { sessionId: 7 }),
+            hook('PreToolUse', 'Bash', { agentId: 7 }),
             hook('SubagentStart', null, { agentId: 'a1' }),
             hook('SubagentStop', null, { agentId: 'a1' }),
             hook('Elsewhere', 'Bash'),
@@ -386,6 +387,7 @@ describe("a subagent's tools", () => {
                     P2: { sessionId: SESSION, tools: [], dozing: false },
                     P3: { sessionId: SESSION, tools: [], dozing: false, agents: { a1: [7] } },
                     P4: { sessionId: SESSION, tools: [], dozing: false, agents: ['Bash'] },
+                    P5: { sessionId: SESSION, tools: [], dozing: false, agents: null },
                 },
             }).panes,
         ).toEqual({ [PANE]: good });
