@@ -617,3 +617,91 @@ describe('activity, doze and turn start', () => {
         );
     });
 });
+
+describe('a conductor watching its rails', () => {
+    const asleep = (...paneIds: string[]): KelpiWorld['activity'] =>
+        Object.fromEntries(
+            paneIds.map((id) => [id, { sessionId: 'session-' + id, tools: [], dozing: true }]),
+        );
+    const conductor = livePane('C', 'A', 'conducting-demo');
+    const rail = (id: string, overrides: Partial<WorldPane> = {}) =>
+        livePane(id, 'A', 'demo-rail-' + id.toLowerCase(), overrides);
+    const decide = (
+        panes: WorldPane[],
+        quiet: ReadonlySet<string> = new Set(),
+        previous: TankState | null = null,
+    ) =>
+        decideTank(
+            { ...handBuilt(panes), activity: asleep('C', 'F', 'D') },
+            previous,
+            FALLBACK_CHORDS,
+            quiet,
+        );
+    const conductorOf = (tank: TankState) => tank.sessions.find((s) => s.paneId === 'C')!;
+
+    it('a dozing conductor stays awake while a rail in its workspace is working', () => {
+        const tank = decide([conductor, rail('P2', { status: 'running' })]);
+        expect(conductorOf(tank)).toMatchObject({ role: 'conductor', dozing: false });
+    });
+
+    it('the conductor dozes again once its last working rail stops, with no new idle_prompt', () => {
+        const steps = [
+            [rail('P2', { status: 'running' }), rail('P3', { status: 'running' })],
+            [rail('P2'), rail('P3', { status: 'running' })],
+            [rail('P2'), rail('P3', { agentSessionId: null })],
+        ];
+        let previous: TankState | null = null;
+        const dozing = steps.map((rails) => {
+            previous = decide([conductor, ...rails], new Set(), previous);
+            return conductorOf(previous).dozing;
+        });
+        expect(dozing).toEqual([false, false, true]);
+    });
+
+    describe('a dozing conductor sleeps when no rail in its workspace is working', () => {
+        it.each([
+            ['no rail', [] as WorldPane[]],
+            ['a waiting rail', [rail('P2')]],
+            ['an idle rail', [rail('P2', { status: 'idle' })]],
+            ['a closed rail', [rail('P2', { agentSessionId: null })]],
+        ])('with %s', (_, rails) => {
+            expect(conductorOf(decide([conductor, ...rails])).dozing).toBe(true);
+        });
+
+        it('with a rail whose pane has gone', () => {
+            const before = decide([conductor, rail('P2', { status: 'running' })]);
+            expect(conductorOf(before).dozing).toBe(false);
+            expect(conductorOf(decide([conductor], new Set(), before)).dozing).toBe(true);
+        });
+    });
+
+    it('a working rail in another workspace never keeps a conductor awake', () => {
+        const elsewhere = livePane('P2', 'B', 'demo-rail-a', { status: 'running' });
+        expect(conductorOf(decide([conductor, elsewhere])).dozing).toBe(true);
+    });
+
+    it('a fish and a day session beside a working rail still doze', () => {
+        const tank = decide([
+            livePane('F', 'A', 'harbour-fish'),
+            livePane('D', 'A', 'fri-16-10-2026'),
+            rail('P2', { status: 'running' }),
+        ]);
+        expect(tank.sessions.map((s) => [s.role, s.dozing])).toEqual([
+            ['fish', true],
+            ['day', true],
+            ['rail', false],
+        ]);
+    });
+
+    it('a watched conductor keeps its state, glow and relay; only dozing differs', () => {
+        for (const quiet of [new Set<string>(), new Set(['C'])]) {
+            const watched = conductorOf(
+                decide([conductor, rail('P2', { status: 'running' })], quiet),
+            );
+            const alone = conductorOf(decide([conductor, rail('P2')], quiet));
+            expect(watched.state).toBe(quiet.size === 0 ? 'wantsYou' : 'update');
+            expect({ ...watched, dozing: null }).toEqual({ ...alone, dozing: null });
+            expect([watched.dozing, alone.dozing]).toEqual([false, true]);
+        }
+    });
+});

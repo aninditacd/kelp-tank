@@ -50,7 +50,8 @@ function displayNameOf(pane: WorldPane): string {
  * `babies` is the agent book from Kelp Tank's Claude hook and the time to judge it at; a session's
  * baby fish are its pane's live agents of its own session id. Null, as without the hook, gives none.
  * `world.activity` gives a working session its `activity` and a waiting one its `dozing`
- * (src/activity.ts); a rail never has either.
+ * (src/activity.ts); a rail never has either. A waiting conductor does not doze while a rail in
+ * its workspace is working, so a sleeping conductor means its whole batch has stopped.
  */
 export function decideTank(
     world: KelpiWorld,
@@ -94,7 +95,21 @@ export function decideTank(
             };
         });
 
+    // A conductor stays awake while any rail in its workspace is working.
+    const railsWorking = new Set(
+        live
+            .filter((session) => session.role === 'rail' && session.state === 'working')
+            .map((session) => session.workspaceId),
+    );
+
     const sessions = live.map((session) => {
+        if (
+            session.role === 'conductor' &&
+            session.dozing &&
+            railsWorking.has(session.workspaceId)
+        ) {
+            return { ...session, dozing: false };
+        }
         if (session.role !== 'rail' || session.state !== 'wantsYou') return session;
         const conductor = live.find(
             (other) =>

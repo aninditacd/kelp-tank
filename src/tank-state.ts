@@ -64,7 +64,10 @@ export interface TankSession {
      * it is not working, is a rail, runs a tool with no prop, or the hook is not installed.
      */
     activity: Activity | null;
-    /** A waiting session Claude reported idle (`idle_prompt`) sleeps on its ledge. Never a rail. */
+    /**
+     * A waiting session Claude reported idle (`idle_prompt`) sleeps on its ledge. Never a rail, and
+     * never a conductor while a rail in its workspace is working.
+     */
     dozing: boolean;
     /** When a working session's turn began, in epoch milliseconds; null in every other state. */
     workingSince: number | null;

@@ -868,6 +868,57 @@ describe('the live tank', () => {
             }
         });
 
+        it('a conductor watched by a working rail stays awake, and dozes once the rail stops', async () => {
+            const RAIL = activityPaneId('lighthouse-fish');
+            const fresh = structuredClone(activitySnapshot);
+            fresh.sequence = 129;
+            for (const p of fresh.state.workspaces.flatMap((w) => w.panes)) {
+                if (p.id === HARBOUR) {
+                    Object.assign(p, {
+                        status: 'waitingForInput',
+                        agentKind: 'claude',
+                        agentSessionID: HARBOUR_SESSION,
+                        title: '✳ demo-conductor',
+                    });
+                }
+                if (p.id === RAIL) {
+                    Object.assign(p, {
+                        status: 'running',
+                        agentKind: 'claude',
+                        agentSessionID: 'demo-rail-session',
+                        title: '✳ demo-rail-a',
+                    });
+                }
+            }
+            const fake = fakeKelpi({
+                activity: {
+                    epoch,
+                    sequence: 129,
+                    panes: { [HARBOUR]: { sessionId: HARBOUR_SESSION, tools: [], dozing: true } },
+                },
+            });
+            await fake.resolveSnapshot(fresh);
+            expect(workspaceOf(RAIL)).toBe(workspaceOf(HARBOUR));
+            expect(of(fake, HARBOUR)).toMatchObject({ role: 'conductor', dozing: false });
+            fake.deliver({
+                epoch,
+                sequence: 130,
+                name: 'state.changed',
+                data: [
+                    {
+                        kind: 'agent-status-changed',
+                        workspaceID: workspaceOf(RAIL),
+                        paneID: RAIL,
+                        status: 'waitingForInput',
+                        agentSessionID: 'demo-rail-session',
+                        agentKind: 'claude',
+                        agentStartedAt: null,
+                    },
+                ],
+            });
+            expect(of(fake, HARBOUR)).toMatchObject({ state: 'wantsYou', dozing: true });
+        });
+
         it('a rail gets no prop or doze from the seed', async () => {
             const fake = fakeKelpi({ activity: answer(['Bash']) });
             await fake.resolveSnapshot(
