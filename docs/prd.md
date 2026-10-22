@@ -64,7 +64,8 @@ All creatures are cute, with big eyes and pink cheeks. A busy ledge is shared, n
 - With tools overlapping, the creature shows the newest one still running. A failed tool clears like a finished one, and every prop goes when the turn ends. A prop stays a second after a quick tool, so it does not flicker.
 - **Tired:** a working turn of 10 minutes or more swims slower, with its nose drooping, half-shut eyes and a sweat drop. It still shows its prop.
 - **Dozing:** when Claude reports a waiting session idle (its `idle_prompt` reminder), the creature shuts its eyes and sleeps on its own ledge's floor, never lower, with rising "z"s. A sleeping "wants Dita" creature keeps its glow and "!" but stops tapping. It wakes when its next turn starts or the session ends. A conductor stays awake while any rail in its workspace is still working, and falls asleep once none is, so a sleeping conductor means no rail beside it is still working. A rail waiting on Dita counts as stopped.
-- Rails show none of this: no props, no tired look and no dozing. They keep following their conductor.
+- Rails and baby fish show the same props, by the same rules (decided 22 Oct 2026). A baby fish shows what its own background agent is running, never its parent's tool, and keeps its prop while its parent waits. Props on these small fish are drawn larger relative to the fish, so they read in a sidebar.
+- Rails still never look tired and never doze, and keep following their conductor. Baby fish never look tired or doze either.
 - The plugin reads only tool names, never what a tool was given or returned.
 
 **Interaction**

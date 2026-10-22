@@ -16,7 +16,16 @@ export interface PaneActivity {
     sessionId: string | null;
     tools: string[];
     dozing: boolean;
+    /** Each background agent's running tools, oldest start first, by agent id. */
+    agents: Record<string, string[]>;
 }
+
+const fresh = (sessionId: string | null): PaneActivity => ({
+    sessionId,
+    tools: [],
+    dozing: false,
+    agents: {},
+});
 
 const GROUPS: Record<string, Activity> = {
     Read: 'read',
@@ -41,10 +50,11 @@ export function activityForTool(tool: string): Activity | null {
 const FINISHES = new Set(['PostToolUse', 'PostToolUseFailure']);
 
 /**
- * The world after one `dita.kelp-tank.hook` event's `data`. A parent session's `PreToolUse`
- * records its tool; a `PostToolUse` or `PostToolUseFailure` removes the latest start of that
- * tool. A subagent's call (`agentId` set), a session id other than the pane's, an unknown pane,
- * a subagent start or stop, and anything malformed return `world` itself.
+ * The world after one `dita.kelp-tank.hook` event's `data`. A `PreToolUse` records its tool; a
+ * `PostToolUse` or `PostToolUseFailure` removes the latest start of that tool. A call with an
+ * `agentId` does this for that agent's tools, never the parent's, and a `SubagentStop` forgets
+ * that agent's tools. A session id other than the pane's, an unknown pane, a subagent start and
+ * anything malformed return `world` itself.
  */
 export function applyToolEvent(world: KelpiWorld, data: unknown): KelpiWorld {
     if (typeof data !== 'object' || data === null) return world;
@@ -67,29 +77,42 @@ export function recordTool(
     if (typeof data !== 'object' || data === null) return activity;
     const { paneID, event, sessionId, agentId, toolName } = data as Record<string, unknown>;
     if (typeof paneID !== 'string' || typeof sessionId !== 'string') return activity;
-    if (typeof toolName !== 'string' || agentId !== null) return activity;
-    if (event !== 'PreToolUse' && !FINISHES.has(event as string)) return activity;
+    if (agentId !== null && typeof agentId !== 'string') return activity;
 
     const known = activity[paneID];
-    const current: PaneActivity =
-        known?.sessionId === sessionId ? known : { sessionId, tools: [], dozing: false };
+    const current = known?.sessionId === sessionId ? known : fresh(sessionId);
+    if (event === 'SubagentStop' && agentId !== null) {
+        if (!Object.hasOwn(current.agents, agentId)) return activity;
+        const agents = { ...current.agents };
+        delete agents[agentId];
+        return { ...activity, [paneID]: { ...current, agents } };
+    }
+    if (typeof toolName !== 'string') return activity;
+    if (event !== 'PreToolUse' && !FINISHES.has(event as string)) return activity;
+
+    const running = agentId === null ? current.tools : (current.agents[agentId] ?? []);
     let tools: string[];
     if (event === 'PreToolUse') {
-        tools = [...current.tools, toolName];
+        tools = [...running, toolName];
     } else {
-        const index = current.tools.lastIndexOf(toolName);
+        const index = running.lastIndexOf(toolName);
         if (index < 0) return activity;
-        tools = current.tools.filter((_, i) => i !== index);
+        tools = running.filter((_, i) => i !== index);
     }
-    return { ...activity, [paneID]: { ...current, tools } };
+    const next: PaneActivity =
+        agentId === null
+            ? { ...current, tools }
+            : { ...current, agents: { ...current.agents, [agentId]: tools } };
+    return { ...activity, [paneID]: next };
 }
 
 /** Kelpi's agent events that end or begin a turn: no tool can still be running after one. */
 const TURN_EDGES = new Set(['stop', 'start', 'session-end', 'error']);
 
 /**
- * The world after one of Kelpi's own `agent.event` events. A turn edge forgets the pane's tools;
- * `start` and `session-end` also wake it. Claude's `idle_prompt` reminder dozes a pane that is
+ * The world after one of Kelpi's own `agent.event` events. A turn edge forgets the pane's own
+ * tools; `start` and `session-end` also wake it. Background agents outlive their parent's turn,
+ * so only `session-end` forgets their tools. Claude's `idle_prompt` reminder dozes a pane that is
  * waiting for input. Anything else, or an unknown pane, returns `world` itself.
  */
 export function applyAgentEvent(world: KelpiWorld, event: AgentHookEvent): KelpiWorld {
@@ -109,12 +132,16 @@ export function recordAgentEvent(
     event: AgentHookEvent,
 ): Record<string, PaneActivity> {
     const known = activity[event.paneID];
-    const current: PaneActivity =
-        known?.sessionId === sessionId ? known : { sessionId, tools: [], dozing: false };
+    const current = known?.sessionId === sessionId ? known : fresh(sessionId);
     let next: PaneActivity;
     if (TURN_EDGES.has(event.type)) {
         const wakes = event.type === 'start' || event.type === 'session-end';
-        next = { ...current, tools: [], dozing: wakes ? false : current.dozing };
+        next = {
+            ...current,
+            tools: [],
+            dozing: wakes ? false : current.dozing,
+            agents: event.type === 'session-end' ? {} : current.agents,
+        };
     } else if (
         event.type === 'notification' &&
         event.notificationType === 'idle_prompt' &&
@@ -146,14 +173,20 @@ export interface ActivityAnswer {
 
 const NO_ANSWER: ActivityAnswer = { epoch: null, sequence: -1, panes: {} };
 
+const isToolList = (value: unknown): value is string[] =>
+    Array.isArray(value) && value.every((tool) => typeof tool === 'string');
+
 function isPaneActivity(value: unknown): value is PaneActivity {
     if (typeof value !== 'object' || value === null) return false;
-    const { sessionId, tools, dozing } = value as Record<string, unknown>;
+    const { sessionId, tools, dozing, agents } = value as Record<string, unknown>;
     return (
         (typeof sessionId === 'string' || sessionId === null) &&
-        Array.isArray(tools) &&
-        tools.every((tool) => typeof tool === 'string') &&
-        typeof dozing === 'boolean'
+        isToolList(tools) &&
+        typeof dozing === 'boolean' &&
+        typeof agents === 'object' &&
+        agents !== null &&
+        !Array.isArray(agents) &&
+        Object.values(agents).every(isToolList)
     );
 }
 

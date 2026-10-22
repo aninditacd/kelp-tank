@@ -116,11 +116,6 @@ describe('applyToolEvent', () => {
         expect(applyToolEvent(started, hook('PostToolUse', 'Bash'))).toBe(started);
     });
 
-    it("a subagent's tool call is ignored", () => {
-        const w = world();
-        expect(applyToolEvent(w, hook('PreToolUse', 'Bash', { agentId: 'a1' }))).toBe(w);
-    });
-
     it('a tool call from another session id is ignored', () => {
         const w = world();
         expect(applyToolEvent(w, hook('PreToolUse', 'Bash', { sessionId: 'old-session' }))).toBe(w);
@@ -142,6 +137,7 @@ describe('applyToolEvent', () => {
             hook('PostToolUse', null),
             hook('PreToolUse', 'Bash', { paneID: undefined }),
             hook('PreToolUse', 'Bash', { sessionId: 7 }),
+            hook('PreToolUse', 'Bash', { agentId: 7 }),
             hook('SubagentStart', null, { agentId: 'a1' }),
             hook('SubagentStop', null, { agentId: 'a1' }),
             hook('Elsewhere', 'Bash'),
@@ -158,6 +154,7 @@ describe('applyToolEvent', () => {
             sessionId: 'session-2',
             tools: ['Bash'],
             dozing: false,
+            agents: {},
         });
     });
 });
@@ -247,17 +244,18 @@ describe('applyAgentEvent', () => {
 describe('recordTool and recordAgentEvent', () => {
     it('recordTool records a parent tool with no world', () => {
         const started = recordTool({}, hook('PreToolUse', 'Bash'));
-        expect(started).toEqual({ [PANE]: { sessionId: SESSION, tools: ['Bash'], dozing: false } });
+        expect(started).toEqual({
+            [PANE]: { sessionId: SESSION, tools: ['Bash'], dozing: false, agents: {} },
+        });
         expect(recordTool(started, hook('PostToolUse', 'Bash'))[PANE].tools).toEqual([]);
-        // A subagent's call and malformed data change nothing.
-        expect(recordTool(started, hook('PreToolUse', 'Read', { agentId: 'a1' }))).toBe(started);
+        // Malformed data changes nothing.
         expect(recordTool(started, null)).toBe(started);
     });
 
     it('recordAgentEvent dozes on idle_prompt and a start wakes it', () => {
         const idle = agentEvent({ type: 'notification', notificationType: 'idle_prompt' });
         const dozed = recordAgentEvent({}, SESSION, idle);
-        expect(dozed[PANE]).toEqual({ sessionId: SESSION, tools: [], dozing: true });
+        expect(dozed[PANE]).toEqual({ sessionId: SESSION, tools: [], dozing: true, agents: {} });
         const woke = recordAgentEvent(
             dozed,
             SESSION,
@@ -268,7 +266,7 @@ describe('recordTool and recordAgentEvent', () => {
 });
 
 describe('readActivity and seedActivity', () => {
-    const entry = { sessionId: SESSION, tools: ['Bash'], dozing: true };
+    const entry = { sessionId: SESSION, tools: ['Bash'], dozing: true, agents: { a1: ['Read'] } };
 
     it('readActivity keeps well-formed entries and drops the rest', () => {
         expect(
@@ -277,16 +275,16 @@ describe('readActivity and seedActivity', () => {
                 sequence: 12,
                 panes: {
                     [PANE]: entry,
-                    P2: { sessionId: null, tools: [], dozing: false },
-                    P3: { sessionId: SESSION, tools: [7], dozing: false },
-                    P4: { sessionId: SESSION, tools: [], dozing: 'yes' },
+                    P2: { sessionId: null, tools: [], dozing: false, agents: {} },
+                    P3: { sessionId: SESSION, tools: [7], dozing: false, agents: {} },
+                    P4: { sessionId: SESSION, tools: [], dozing: 'yes', agents: {} },
                     P5: null,
                 },
             }),
         ).toEqual({
             epoch: 'e1',
             sequence: 12,
-            panes: { [PANE]: entry, P2: { sessionId: null, tools: [], dozing: false } },
+            panes: { [PANE]: entry, P2: { sessionId: null, tools: [], dozing: false, agents: {} } },
         });
         const empty = { epoch: null, sequence: -1, panes: {} };
         for (const answer of [undefined, null, 'x', { epoch: 3, sequence: 1, panes: {} }]) {
@@ -304,5 +302,94 @@ describe('readActivity and seedActivity', () => {
         const focused = seedActivity(world([pane({ status: 'idle' })]), { [PANE]: entry });
         expect(focused.activity[PANE]).toEqual({ ...entry, dozing: false });
         expect(focused.panes).toEqual([pane({ status: 'idle' })]);
+    });
+});
+
+describe("a subagent's tools", () => {
+    const agentTools = (w: KelpiWorld, agentId: string) => w.activity[PANE]?.agents[agentId];
+    const sub = (event: string, toolName: string | null, agentId = 'a1') =>
+        hook(event, toolName, { agentId });
+
+    it("a subagent's PreToolUse records the tool under its agent, not the parent", () => {
+        const parent = applyToolEvent(world(), hook('PreToolUse', 'Agent'));
+        const w = applyToolEvent(parent, sub('PreToolUse', 'Bash'));
+        expect(agentTools(w, 'a1')).toEqual(['Bash']);
+        expect(tools(w)).toEqual(['Agent']);
+    });
+
+    it("a subagent's finish removes its latest start from that agent only, with a repeated tool", () => {
+        let w = applyToolEvent(world(), hook('PreToolUse', 'Bash'));
+        for (const tool of ['Bash', 'Read', 'Bash']) w = applyToolEvent(w, sub('PreToolUse', tool));
+        w = applyToolEvent(w, sub('PreToolUse', 'Bash', 'a2'));
+        w = applyToolEvent(w, sub('PostToolUse', 'Bash'));
+        expect(agentTools(w, 'a1')).toEqual(['Bash', 'Read']);
+        expect(agentTools(w, 'a2')).toEqual(['Bash']);
+        expect(tools(w)).toEqual(['Bash']);
+        // A finish for a tool the agent is not running changes nothing.
+        expect(applyToolEvent(w, sub('PostToolUse', 'Edit'))).toBe(w);
+    });
+
+    it("a PostToolUseFailure from a subagent forgets that agent's tool", () => {
+        const w = applyToolEvent(world(), sub('PreToolUse', 'Bash'));
+        expect(agentTools(applyToolEvent(w, sub('PostToolUseFailure', 'Bash')), 'a1')).toEqual([]);
+    });
+
+    it("a SubagentStop forgets that agent's tools", () => {
+        let w = applyToolEvent(world(), sub('PreToolUse', 'Bash'));
+        w = applyToolEvent(w, sub('PreToolUse', 'Read', 'a2'));
+        w = applyToolEvent(w, sub('SubagentStop', null));
+        expect(w.activity[PANE].agents).toEqual({ a2: ['Read'] });
+    });
+
+    it('a SubagentStart changes nothing in the activity record', () => {
+        const w = applyToolEvent(world(), hook('PreToolUse', 'Bash'));
+        expect(applyToolEvent(w, sub('SubagentStart', null))).toBe(w);
+        const record = w.activity;
+        expect(recordTool(record, sub('SubagentStart', null))).toBe(record);
+    });
+
+    it("the parent's stop, start and error keep every agent's tools", () => {
+        for (const type of ['stop', 'start', 'error'] as const) {
+            let w = applyToolEvent(world(), hook('PreToolUse', 'Read'));
+            w = applyToolEvent(w, sub('PreToolUse', 'Bash'));
+            w = applyAgentEvent(w, agentEvent({ type }));
+            expect(tools(w), type).toEqual([]);
+            expect(agentTools(w, 'a1'), type).toEqual(['Bash']);
+        }
+    });
+
+    it("session-end forgets every agent's tools", () => {
+        const w = applyToolEvent(world(), sub('PreToolUse', 'Bash'));
+        const ended = applyAgentEvent(w, agentEvent({ type: 'session-end' }));
+        expect(ended.activity[PANE].agents).toEqual({});
+    });
+
+    it("a subagent's tool call under a new session id starts afresh", () => {
+        const old = applyToolEvent(world(), sub('PreToolUse', 'Read'));
+        const moved = { ...old, panes: [pane({ agentSessionId: 'session-2' })] };
+        const next = applyToolEvent(moved, sub('PreToolUse', 'Bash', 'a9'));
+        expect(next).toBe(moved);
+        const fresh = applyToolEvent(
+            moved,
+            hook('PreToolUse', 'Bash', { agentId: 'a9', sessionId: 'session-2' }),
+        );
+        expect(fresh.activity[PANE].agents).toEqual({ a9: ['Bash'] });
+    });
+
+    it('readActivity keeps well-formed agents and drops an entry with malformed agents', () => {
+        const good = { sessionId: SESSION, tools: [], dozing: false, agents: { a1: ['Bash'] } };
+        expect(
+            readActivity({
+                epoch: 'e1',
+                sequence: 1,
+                panes: {
+                    [PANE]: good,
+                    P2: { sessionId: SESSION, tools: [], dozing: false },
+                    P3: { sessionId: SESSION, tools: [], dozing: false, agents: { a1: [7] } },
+                    P4: { sessionId: SESSION, tools: [], dozing: false, agents: ['Bash'] },
+                    P5: { sessionId: SESSION, tools: [], dozing: false, agents: null },
+                },
+            }).panes,
+        ).toEqual({ [PANE]: good });
     });
 });

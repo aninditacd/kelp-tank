@@ -425,7 +425,7 @@ describe('baby fish', () => {
             book: book({ young: 1000, old: 5000 }),
             now: NOW,
         });
-        expect(tank.sessions.map((s) => [s.paneId, s.babies])).toEqual([
+        expect(tank.sessions.map((s) => [s.paneId, s.babies.map((b) => b.id)])).toEqual([
             ['p1', ['old', 'young']],
             ['p2', []],
         ]);
@@ -442,7 +442,7 @@ describe('baby fish', () => {
     it('a session that ends takes all its baby fish', () => {
         const babies = { book: book({ a1: 0 }), now: NOW };
         const before = decideTank(world, null, FALLBACK_CHORDS, NONE, babies);
-        expect(before.sessions[0].babies).toEqual(['a1']);
+        expect(before.sessions[0].babies).toEqual([{ id: 'a1', activity: null }]);
         // Its Claude session ended: Kelpi cleared the session id and kept the pane.
         const ended = handBuilt([
             livePane('p1', 'A', 'kelp-tank', { agentSessionId: null }),
@@ -471,7 +471,7 @@ describe('activity, doze and turn start', () => {
         tools: string[],
         dozing = false,
         sessionId = 'session-' + paneId,
-    ) => ({ [paneId]: { sessionId, tools, dozing } });
+    ) => ({ [paneId]: { sessionId, tools, dozing, agents: {} } });
     const decided = (
         panes: WorldPane[],
         activity: KelpiWorld['activity'],
@@ -559,13 +559,26 @@ describe('activity, doze and turn start', () => {
         expect(s.dozing).toBe(false);
     });
 
-    it('a working rail shows no activity', () => {
+    it('a working rail shows the group of its newest running tool', () => {
         const [s] = decided(
             [livePane('P1', 'A', 'rail-a', { status: 'running' })],
             tracked('P1', ['Read']),
         );
         expect(s.role).toBe('rail');
-        expect(s.activity).toBeNull();
+        expect(s.activity).toBe('read');
+    });
+
+    it('a waiting rail shows no activity, even with a tool still running', () => {
+        const [s] = decided([livePane('P1', 'A', 'rail-a')], tracked('P1', ['Read']));
+        expect(s).toMatchObject({ role: 'rail', state: 'wantsYou', activity: null });
+    });
+
+    it('a working rail whose newest tool has no group shows no prop', () => {
+        const [s] = decided(
+            [livePane('P1', 'A', 'rail-a', { status: 'running' })],
+            tracked('P1', ['Read', 'mcp__x__y']),
+        );
+        expect(s).toMatchObject({ role: 'rail', activity: null });
     });
 
     it('a waiting rail never dozes', () => {
@@ -621,7 +634,10 @@ describe('activity, doze and turn start', () => {
 describe('a conductor watching its rails', () => {
     const asleep = (...paneIds: string[]): KelpiWorld['activity'] =>
         Object.fromEntries(
-            paneIds.map((id) => [id, { sessionId: 'session-' + id, tools: [], dozing: true }]),
+            paneIds.map((id) => [
+                id,
+                { sessionId: 'session-' + id, tools: [], dozing: true, agents: {} },
+            ]),
         );
     const conductor = livePane('C', 'A', 'conducting-demo');
     const rail = (id: string, overrides: Partial<WorldPane> = {}) =>
@@ -703,5 +719,58 @@ describe('a conductor watching its rails', () => {
             expect({ ...watched, dozing: null }).toEqual({ ...alone, dozing: null });
             expect([watched.dozing, alone.dozing]).toEqual([false, true]);
         }
+    });
+});
+
+describe("a baby fish's prop", () => {
+    const NOW = 1_760_000_000_000;
+    const book: AgentBook = {
+        revision: 1,
+        panes: {
+            P1: {
+                sessionId: 'session-P1',
+                agents: {
+                    a1: { startedAt: NOW - 2000, lastSeen: NOW },
+                    a2: { startedAt: NOW - 1000, lastSeen: NOW },
+                },
+            },
+        },
+    };
+    const babiesOf = (
+        status: WorldPane['status'],
+        tools: string[],
+        agents: Record<string, string[]>,
+    ) => {
+        const world = {
+            ...handBuilt([livePane('P1', 'A', 'harbour-fish', { status })]),
+            activity: { P1: { sessionId: 'session-P1', tools, dozing: false, agents } },
+        };
+        return decideTank(world, null, FALLBACK_CHORDS, new Set(), { book, now: NOW }).sessions[0];
+    };
+
+    it("a baby fish shows its own agent's newest tool, even while its parent waits", () => {
+        const s = babiesOf('waitingForInput', [], { a1: ['Read', 'Bash'] });
+        expect(s.state).toBe('wantsYou');
+        expect(s.babies).toEqual([
+            { id: 'a1', activity: 'command' },
+            { id: 'a2', activity: null },
+        ]);
+    });
+
+    it("a subagent's tool never shows on its parent, and the parent's never on a baby", () => {
+        const busy = babiesOf('running', ['Agent'], { a1: ['Read'] });
+        expect(busy.activity).toBe('agent');
+        expect(busy.babies[0]).toEqual({ id: 'a1', activity: 'read' });
+        const parentOnly = babiesOf('running', ['Bash'], {});
+        expect(parentOnly.activity).toBe('command');
+        expect(parentOnly.babies).toEqual([
+            { id: 'a1', activity: null },
+            { id: 'a2', activity: null },
+        ]);
+    });
+
+    it("a baby's newest tool with no group shows no prop", () => {
+        const s = babiesOf('running', [], { a1: ['Read', 'mcp__x__y'] });
+        expect(s.babies[0]).toEqual({ id: 'a1', activity: null });
     });
 });

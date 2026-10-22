@@ -246,12 +246,26 @@ describe('the activity command', () => {
         await handlers.get('dita.kelp-tank.hook')!(tool('PreToolUse', 'Bash'), PANE);
         await settle();
         expect((await activity(handlers)).panes).toEqual({
-            p1: { sessionId: 's1', tools: ['Bash'], dozing: false },
+            p1: { sessionId: 's1', tools: ['Bash'], dozing: false, agents: {} },
         });
         await handlers.get('dita.kelp-tank.hook')!(tool('PostToolUse', 'Bash'), PANE);
         await settle();
         expect((await activity(handlers)).panes).toEqual({
-            p1: { sessionId: 's1', tools: [], dozing: false },
+            p1: { sessionId: 's1', tools: [], dozing: false, agents: {} },
+        });
+    });
+
+    it("the activity command answers a subagent's running tool under its agent", async () => {
+        const { api, handlers } = fakeApi();
+        activate(api);
+        const sub = (event: string, name: string) => ({
+            ...tool(event, name),
+            argv: [event, '--session', 's1', '--agent', 'a1', '--tool', name],
+        });
+        await handlers.get('dita.kelp-tank.hook')!(sub('PreToolUse', 'Bash'), PANE);
+        await settle();
+        expect((await activity(handlers)).panes).toEqual({
+            p1: { sessionId: 's1', tools: [], dozing: false, agents: { a1: ['Bash'] } },
         });
     });
 
@@ -260,11 +274,11 @@ describe('the activity command', () => {
         activate(api);
         hear({ type: 'notification', notificationType: 'idle_prompt', sessionID: 's1' });
         expect((await activity(handlers)).panes).toEqual({
-            p1: { sessionId: 's1', tools: [], dozing: true },
+            p1: { sessionId: 's1', tools: [], dozing: true, agents: {} },
         });
         hear({ type: 'start', status: 'running', sessionID: 's1' });
         expect((await activity(handlers)).panes).toEqual({
-            p1: { sessionId: 's1', tools: [], dozing: false },
+            p1: { sessionId: 's1', tools: [], dozing: false, agents: {} },
         });
     });
 
@@ -309,7 +323,12 @@ describe('the activity command', () => {
         await settle();
         const answer = await activity(handlers);
         expect(answer.sequence).toBe(101);
-        expect(answer.panes.p1).toEqual({ sessionId: 's1', tools: ['Bash'], dozing: false });
+        expect(answer.panes.p1).toEqual({
+            sessionId: 's1',
+            tools: ['Bash'],
+            dozing: false,
+            agents: {},
+        });
     });
 
     it('the backend never stores activity', async () => {

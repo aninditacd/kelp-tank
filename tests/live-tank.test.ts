@@ -15,7 +15,7 @@ import {
     workspaceIdByName,
 } from './support/recorded-run';
 import { footerEvents, footerPaneId, footerSnapshot, footerSnapshotAt } from './support/footer-run';
-import { babyEvents, babyPaneId, babySnapshot, hookEvents } from './support/baby-fish-run';
+import { babyEvents, babyPaneId, babySnapshot, hookEvents, timeAt } from './support/baby-fish-run';
 import { activityEvents, activityPaneId, activitySnapshot } from './support/tool-activity-run';
 
 /** A fake `window.kelpi`: the test delivers events and resolves each snapshot itself. */
@@ -456,7 +456,10 @@ describe('the live tank', () => {
             pluginID,
         });
         const babiesOf = (fake: ReturnType<typeof fakeKelpi>) =>
-            fake.states.at(-1)?.sessions.find((s) => s.paneId === PANE)?.babies;
+            fake.states
+                .at(-1)
+                ?.sessions.find((s) => s.paneId === PANE)
+                ?.babies.map((b) => b.id);
 
         it('an agents event updates the baby fish without a new snapshot', async () => {
             const fake = fakeKelpi();
@@ -604,6 +607,43 @@ describe('the live tank', () => {
             expect(harbour(fake)).toMatchObject({ state: 'working', activity: null });
         });
 
+        it("the recorded background agent's baby shows its Bash across the parent's stop", async () => {
+            vi.useFakeTimers({ toFake: ['setInterval', 'clearInterval', 'setTimeout', 'Date'] });
+            const background = hookEvents.find((h) => h.data.event === 'SubagentStart')!.data
+                .agentId!;
+            const fake = await started();
+            const babyAfter = (sequence: number) => {
+                vi.setSystemTime(timeAt(sequence));
+                babyEvents
+                    .filter((e) => e.sequence <= sequence && e.sequence > delivered)
+                    .forEach(fake.deliver);
+                delivered = sequence;
+                return harbour(fake)?.babies.find((b) => b.id === background)?.activity;
+            };
+            let delivered = 0;
+            expect(babyAfter(49)).toBe('command');
+            expect(babyEvents.find((e) => e.sequence === 61)?.name).toBe('agent.event');
+            expect(babyAfter(61)).toBe('command');
+            expect(babyAfter(70)).toBeNull();
+            expect(babyAfter(72)).toBe('command');
+            expect(babyAfter(73)).toBeNull();
+        });
+
+        it("the recorded foreground agent's baby shows Bash until it finishes", async () => {
+            vi.useFakeTimers({ toFake: ['setInterval', 'clearInterval', 'setTimeout', 'Date'] });
+            const foreground = hookEvents.filter((h) => h.data.event === 'SubagentStart')[1].data
+                .agentId!;
+            const fake = await started();
+            vi.setSystemTime(timeAt(51));
+            upTo(51).forEach(fake.deliver);
+            const baby = () => harbour(fake)?.babies.find((b) => b.id === foreground);
+            expect(baby()?.activity).toBe('command');
+            expect(harbour(fake)?.activity).toBe('agent');
+            babyEvents.filter((e) => e.sequence > 51 && e.sequence <= 53).forEach(fake.deliver);
+            expect(baby()).toEqual({ id: foreground, activity: null });
+            expect(harbour(fake)?.activity).toBe('agent');
+        });
+
         it('a hook event from another plugin is ignored', async () => {
             const fake = await started();
             upTo(40).forEach(fake.deliver);
@@ -742,12 +782,17 @@ describe('the live tank', () => {
             }
             return fresh;
         }
-        const answer = (tools: string[], sequence = 129, answerEpoch: string = epoch) => ({
+        const answer = (
+            tools: string[],
+            sequence = 129,
+            answerEpoch: string = epoch,
+            agents: Record<string, string[]> = {},
+        ) => ({
             epoch: answerEpoch,
             sequence,
             panes: {
-                [HARBOUR]: { sessionId: HARBOUR_SESSION, tools, dozing: false },
-                [LAGOON]: { sessionId: LAGOON_SESSION, tools: [], dozing: true },
+                [HARBOUR]: { sessionId: HARBOUR_SESSION, tools, dozing: false, agents },
+                [LAGOON]: { sessionId: LAGOON_SESSION, tools: [], dozing: true, agents: {} },
             },
         });
         const hookAt = (sequence: number, event: string, toolName: string): PluginEvent => ({
@@ -894,7 +939,14 @@ describe('the live tank', () => {
                 activity: {
                     epoch,
                     sequence: 129,
-                    panes: { [HARBOUR]: { sessionId: HARBOUR_SESSION, tools: [], dozing: true } },
+                    panes: {
+                        [HARBOUR]: {
+                            sessionId: HARBOUR_SESSION,
+                            tools: [],
+                            dozing: true,
+                            agents: {},
+                        },
+                    },
                 },
             });
             await fake.resolveSnapshot(fresh);
@@ -919,13 +971,33 @@ describe('the live tank', () => {
             expect(of(fake, HARBOUR)).toMatchObject({ state: 'wantsYou', dozing: true });
         });
 
-        it('a rail gets no prop or doze from the seed', async () => {
+        it('a rail shows its prop from the seed and still never dozes', async () => {
             const fake = fakeKelpi({ activity: answer(['Bash']) });
             await fake.resolveSnapshot(
                 rebuilt('waitingForInput', { harbour: '✳ demo-rail-y', lagoon: '✳ demo-rail-x' }),
             );
-            expect(of(fake, HARBOUR)).toMatchObject({ role: 'rail', activity: null });
+            expect(of(fake, HARBOUR)).toMatchObject({ role: 'rail', activity: 'command' });
             expect(of(fake, LAGOON)).toMatchObject({ role: 'rail', dozing: false });
+        });
+
+        it("a rebuilt page shows a baby's prop from the activity answer", async () => {
+            vi.useFakeTimers({ toFake: ['setInterval', 'clearInterval', 'setTimeout', 'Date'] });
+            vi.setSystemTime(STARTED + 1000);
+            const book: AgentBook = {
+                revision: 3,
+                panes: {
+                    [HARBOUR]: {
+                        sessionId: HARBOUR_SESSION,
+                        agents: { b1: { startedAt: STARTED, lastSeen: STARTED } },
+                    },
+                },
+            };
+            const fake = fakeKelpi({
+                activity: answer([], 129, epoch, { b1: ['Read'] }),
+                book,
+            });
+            await fake.resolveSnapshot(rebuilt());
+            expect(of(fake, HARBOUR)?.babies).toEqual([{ id: 'b1', activity: 'read' }]);
         });
     });
 });

@@ -5,6 +5,7 @@ import type {
     SessionRole,
     SessionState,
     TankSession,
+    TankBaby,
     TankState,
     TankWorkspace,
 } from '../src/tank-state';
@@ -29,11 +30,12 @@ describe('TankState', () => {
             displayName: string;
             role: SessionRole;
             state: SessionState;
-            babies: string[];
+            babies: TankBaby[];
             activity: Activity | null;
             dozing: boolean;
             workingSince: number | null;
         }>();
+        expectTypeOf<TankBaby>().toEqualTypeOf<{ id: string; activity: Activity | null }>();
         expectTypeOf<TankState>().toEqualTypeOf<{
             workspaces: TankWorkspace[];
             sessions: TankSession[];

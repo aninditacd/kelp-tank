@@ -50,7 +50,8 @@ function displayNameOf(pane: WorldPane): string {
  * `babies` is the agent book from Kelp Tank's Claude hook and the time to judge it at; a session's
  * baby fish are its pane's live agents of its own session id. Null, as without the hook, gives none.
  * `world.activity` gives a working session its `activity` and a waiting one its `dozing`
- * (src/activity.ts); a rail never has either. A waiting conductor does not doze while a rail in
+ * (src/activity.ts); a rail shows its activity but never dozes. Each baby fish shows its own
+ * agent's newest tool, whatever its parent is doing. A waiting conductor does not doze while a rail in
  * its workspace is working, so a sleeping conductor means no rail beside it is working.
  */
 export function decideTank(
@@ -82,11 +83,17 @@ export function decideTank(
                 babies:
                     babies === null || pane.agentSessionId === null
                         ? []
-                        : liveAgents(babies.book, pane.id, pane.agentSessionId, babies.now),
+                        : liveAgents(babies.book, pane.id, pane.agentSessionId, babies.now).map(
+                              (id) => {
+                                  const tool = own?.agents[id]?.at(-1);
+                                  return {
+                                      id,
+                                      activity: tool === undefined ? null : activityForTool(tool),
+                                  };
+                              },
+                          ),
                 activity:
-                    shown === 'working' && role !== 'rail' && newest !== undefined
-                        ? activityForTool(newest)
-                        : null,
+                    shown === 'working' && newest !== undefined ? activityForTool(newest) : null,
                 dozing:
                     (shown === 'wantsYou' || shown === 'update') &&
                     role !== 'rail' &&
