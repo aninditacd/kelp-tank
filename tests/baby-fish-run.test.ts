@@ -26,6 +26,9 @@ function babiesAt(sequence: number, book = bookAt(sequence)) {
     return tank.sessions.find((s) => s.paneId === PANE);
 }
 
+/** The agent ids of the session's baby fish at `sequence`. */
+const idsAt = (sequence: number) => babiesAt(sequence)?.babies.map((b) => b.id);
+
 describe('the recorded baby fish run', () => {
     it('the run holds two starts and two stops, in that order of agents', () => {
         expect(starts.map((h) => h.data.agentId)).toEqual([BACKGROUND, FOREGROUND]);
@@ -34,19 +37,20 @@ describe('the recorded baby fish run', () => {
 
     it('a started agent gives its session one baby fish', () => {
         const start = starts[0].sequence;
-        expect(babiesAt(start - 1)?.babies).toEqual([]);
+        expect(idsAt(start - 1)).toEqual([]);
         // The book's `agents` event follows the hook event.
         const book = babyEvents.find((e) => e.name === 'dita.kelp-tank.agents')!.sequence;
-        expect(babiesAt(book)).toMatchObject({ state: 'working', babies: [BACKGROUND] });
+        expect(babiesAt(book)?.state).toBe('working');
+        expect(idsAt(book)).toEqual([BACKGROUND]);
     });
 
     it('two agents at once give two baby fish, oldest first', () => {
-        expect(babiesAt(starts[1].sequence + 1)?.babies).toEqual([BACKGROUND, FOREGROUND]);
+        expect(idsAt(starts[1].sequence + 1)).toEqual([BACKGROUND, FOREGROUND]);
     });
 
     it("a stopped agent's baby fish leaves and the other stays", () => {
-        expect(babiesAt(stops[0].sequence + 1)?.babies).toEqual([BACKGROUND]);
-        expect(babiesAt(stops[1].sequence + 1)?.babies).toEqual([]);
+        expect(idsAt(stops[0].sequence + 1)).toEqual([BACKGROUND]);
+        expect(idsAt(stops[1].sequence + 1)).toEqual([]);
     });
 
     it('a session that ends takes all its baby fish', () => {

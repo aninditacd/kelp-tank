@@ -68,15 +68,16 @@ function fakeStorage(initial: Record<string, unknown> = {}) {
 
 describe('baby fish in hidden workspaces', () => {
     it('a hidden workspace shows no baby fish', () => {
+        const baby = (id: string) => ({ id, activity: null });
         const state: TankState = {
             workspaces: [A, B],
             sessions: [
-                { ...session('p1', 'a', 'fish', 'working'), babies: ['a1', 'a2'] },
-                { ...session('p2', 'b', 'fish', 'working'), babies: ['b1'] },
+                { ...session('p1', 'a', 'fish', 'working'), babies: [baby('a1'), baby('a2')] },
+                { ...session('p2', 'b', 'fish', 'working'), babies: [baby('b1')] },
             ],
         };
         const shown = visibleState(state, new Set(['a']));
-        expect(shown.sessions.flatMap((s) => s.babies)).toEqual(['b1']);
+        expect(shown.sessions.flatMap((s) => s.babies)).toEqual([baby('b1')]);
     });
 });
 

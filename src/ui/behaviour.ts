@@ -252,6 +252,18 @@ export function restPoint(box: Box, margin: number, from: Vec3): Vec3 {
 export const PROP_HOLD_S = 1;
 
 /**
+ * The smallest scale a prop is drawn at. A rail or baby fish is too small for its prop to read in
+ * a sidebar at its own size, so its prop is drawn at this size instead; larger creatures keep
+ * their own.
+ */
+export const MIN_PROP_SCALE = 0.08;
+
+/** The scale to draw a prop at, for a creature of world scale `scale`. */
+export function propScale(scale: number): number {
+    return Math.max(scale, MIN_PROP_SCALE);
+}
+
+/**
  * The prop to show at clock time `t` (seconds), given what shows now and the session's activity.
  * A running tool shows at once; once it finishes, its prop holds until `until`, then goes.
  */

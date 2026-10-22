@@ -58,10 +58,11 @@ export interface TankSession {
      * (src/agents.ts). Each is a baby fish beside the creature. Empty for a closed session, and
      * for every session when the hook is not installed.
      */
-    babies: string[];
+    babies: TankBaby[];
     /**
-     * What a working session is doing, from its newest running tool (src/activity.ts): null when
-     * it is not working, is a rail, runs a tool with no prop, or the hook is not installed.
+     * What a working session, rails included, is doing, from its newest running tool
+     * (src/activity.ts): null when it is not working, runs a tool with no prop, or the hook is not
+     * installed.
      */
     activity: Activity | null;
     /**
@@ -71,4 +72,12 @@ export interface TankSession {
     dozing: boolean;
     /** When a working session's turn began, in epoch milliseconds; null in every other state. */
     workingSince: number | null;
+}
+
+/** A baby fish: one of a session's live background agents. */
+export interface TankBaby {
+    /** The agent id Claude gave it. */
+    id: string;
+    /** What the agent is doing, from its own newest running tool; null when it runs none with a prop. */
+    activity: Activity | null;
 }

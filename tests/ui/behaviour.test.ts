@@ -20,6 +20,8 @@ import {
     PROP_HOLD_S,
     TIRED_AFTER_MS,
     updatePose,
+    MIN_PROP_SCALE,
+    propScale,
 } from '../../src/ui/behaviour';
 import type {
     SessionRole,
@@ -353,5 +355,25 @@ describe('heldActivity', () => {
             activity: null,
             until: 0,
         });
+    });
+});
+
+describe('prop size on small fish', () => {
+    // Creature sizes from src/ui/creatures.ts: fish 0.12, rail 0.055, a baby two thirds of a rail.
+    const FISH = 0.12;
+    const RAIL = 0.055;
+    const BABY = RAIL * 0.67;
+
+    it("propScale keeps a fish's size and raises a rail's and a baby's to the floor", () => {
+        expect(propScale(FISH)).toBe(FISH);
+        expect(propScale(0.17)).toBe(0.17);
+        expect(propScale(RAIL)).toBe(MIN_PROP_SCALE);
+        expect(propScale(BABY)).toBe(MIN_PROP_SCALE);
+        expect(propScale(MIN_PROP_SCALE)).toBe(MIN_PROP_SCALE);
+    });
+
+    it("MIN_PROP_SCALE sits between a rail's size and a fish's", () => {
+        expect(MIN_PROP_SCALE).toBeGreaterThan(RAIL);
+        expect(MIN_PROP_SCALE).toBeLessThan(FISH);
     });
 });

@@ -25,7 +25,7 @@ import {
 import { ledgeLabel } from '../shortcuts';
 import type { Activity } from '../activity';
 import type { SessionRole, TankSession, TankState } from '../tank-state';
-import { makeMoodFx, makePropFx, type MoodFx, type PropFx } from './activity-fx';
+import { makeMoodFx, makePropFx, type MoodFx, type PropAnchor, type PropFx } from './activity-fx';
 import {
     bodyChanged,
     decideGoals,
@@ -40,6 +40,7 @@ import {
     isTired,
     type Goal,
     nudgePoint,
+    propScale,
     restPoint,
     speedFor,
     swimPoint,
@@ -185,10 +186,20 @@ interface Swimmer extends Creature {
     rest: Vec3 | null;
 }
 
+/** A creature or a baby fish that can show a prop for what it is doing. */
+interface PropHolder {
+    /** The prop on show, held briefly after its tool finishes (`heldActivity`). */
+    shown: { activity: Activity | null; until: number };
+    prop: PropFx | null;
+    propAmount: number;
+}
+
 /** A baby fish: one background agent of a session, swimming beside the session's creature. */
-interface Baby extends Creature {
+interface Baby extends Creature, PropHolder {
     parentId: string;
     index: number;
+    /** What its agent is doing, as last decided. */
+    activity: Activity | null;
     pos: Vector3;
     vel: Vector3;
     yaw: number;
@@ -617,10 +628,17 @@ export function createTank(canvas: HTMLCanvasElement, options: TankOptions): Tan
 
     /** Spawns a baby fish at its parent for each new agent, and starts the shrink of each that left. */
     function syncBabies() {
-        const wanted = new Map<string, { parentId: string; index: number }>();
+        const wanted = new Map<
+            string,
+            { parentId: string; index: number; activity: Activity | null }
+        >();
         for (const s of state.sessions) {
-            s.babies.forEach((agentId, index) =>
-                wanted.set(`${s.paneId}/${agentId}`, { parentId: s.paneId, index }),
+            s.babies.forEach((baby, index) =>
+                wanted.set(`${s.paneId}/${baby.id}`, {
+                    parentId: s.paneId,
+                    index,
+                    activity: baby.activity,
+                }),
             );
         }
         for (const [key, want] of wanted) {
@@ -628,6 +646,7 @@ export function createTank(canvas: HTMLCanvasElement, options: TankOptions): Tan
             const baby = babies.get(key);
             if (baby) {
                 baby.index = want.index;
+                baby.activity = want.activity;
                 if (parent && !parent.leaving) baby.fading = null;
                 continue;
             }
@@ -637,6 +656,10 @@ export function createTank(canvas: HTMLCanvasElement, options: TankOptions): Tan
                 ...made,
                 parentId: want.parentId,
                 index: want.index,
+                activity: want.activity,
+                shown: { activity: null, until: 0 },
+                prop: null,
+                propAmount: 0,
                 pos: parent.pos.clone(),
                 vel: new Vector3(),
                 yaw: parent.yaw,
@@ -659,6 +682,7 @@ export function createTank(canvas: HTMLCanvasElement, options: TankOptions): Tan
             b.fading -= dt;
             if (b.fading <= 0) {
                 scene.remove(b.group);
+                b.prop?.dispose();
                 babies.delete(key);
                 return;
             }
@@ -683,6 +707,8 @@ export function createTank(canvas: HTMLCanvasElement, options: TankOptions): Tan
         b.group.rotation.set(0, b.yaw, MathUtils.clamp(b.vel.y * 1.5, -0.5, 0.5));
         const rate = 10 + b.vel.length() * 24;
         if (b.tail) b.tail.rotation.y = Math.sin(t * rate + b.phase) * 0.45;
+        const anchor = { pos: b.pos, scale: propScale(b.scale), top: b.top };
+        stepProp(b, b.fading === null ? b.activity : null, anchor, t, dt);
         b.fins?.forEach((fin, i) => {
             fin.rotation.x = (i ? -1 : 1) * Math.sin(t * rate * 0.6 + b.phase) * 0.5;
         });
@@ -713,28 +739,43 @@ export function createTank(canvas: HTMLCanvasElement, options: TankOptions): Tan
         swimmers.delete(c.paneId);
     }
 
+    /**
+     * Shows `next`'s prop on `h`, held a second after a quick tool. Small fish get their prop at
+     * `propScale` so it reads in a sidebar.
+     */
+    function stepProp(
+        h: PropHolder,
+        next: Activity | null,
+        anchor: PropAnchor,
+        t: number,
+        dt: number,
+    ) {
+        h.shown = heldActivity(h.shown, next, t);
+        const want = h.shown.activity;
+        if (h.prop && h.prop.activity !== want) {
+            // A new tool swaps the prop at once; a finished one shrinks away first.
+            if (want !== null || h.propAmount < 0.02) {
+                h.prop.dispose();
+                h.prop = null;
+                h.propAmount = 0;
+            }
+        }
+        if (!h.prop && want !== null) {
+            h.prop = makePropFx(want);
+            scene.add(h.prop.group);
+        }
+        if (h.prop) {
+            const on = h.prop.activity === want ? 1 : 0;
+            h.propAmount += (on - h.propAmount) * (1 - Math.exp(-dt * 8));
+            h.prop.step(anchor, t, dt, h.propAmount);
+        }
+    }
+
     /** The prop for what the creature is doing, its sweat drop and its "z"s. */
     function stepLooks(c: Swimmer, t: number, dt: number) {
         const anchor = { pos: c.pos, scale: c.scale, top: c.top };
-        c.shown = heldActivity(c.shown, c.leaving ? null : c.session.activity, t);
-        const want = c.shown.activity;
-        if (c.prop && c.prop.activity !== want) {
-            // A new tool swaps the prop at once; a finished one shrinks away first.
-            if (want !== null || c.propAmount < 0.02) {
-                c.prop.dispose();
-                c.prop = null;
-                c.propAmount = 0;
-            }
-        }
-        if (!c.prop && want !== null) {
-            c.prop = makePropFx(want);
-            scene.add(c.prop.group);
-        }
-        if (c.prop) {
-            const on = c.prop.activity === want ? 1 : 0;
-            c.propAmount += (on - c.propAmount) * (1 - Math.exp(-dt * 8));
-            c.prop.step(anchor, t, dt, c.propAmount);
-        }
+        const next = c.leaving ? null : c.session.activity;
+        stepProp(c, next, { ...anchor, scale: propScale(c.scale) }, t, dt);
         c.mood.step(anchor, t, dt, c.tiredAmount, c.dozeAmount);
     }
 
@@ -1070,7 +1111,10 @@ export function createTank(canvas: HTMLCanvasElement, options: TankOptions): Tan
             canvas.removeEventListener('pointerleave', onLeave);
             canvas.removeEventListener('click', onClick);
             for (const c of [...swimmers.values()]) removeSwimmer(c);
-            for (const b of babies.values()) scene.remove(b.group);
+            for (const b of babies.values()) {
+                scene.remove(b.group);
+                b.prop?.dispose();
+            }
             babies.clear();
             for (const r of ripples) (r.mesh.material as MeshBasicMaterial).dispose();
             tip.remove();
