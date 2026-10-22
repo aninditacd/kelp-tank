@@ -51,7 +51,7 @@ function displayNameOf(pane: WorldPane): string {
  * baby fish are its pane's live agents of its own session id. Null, as without the hook, gives none.
  * `world.activity` gives a working session its `activity` and a waiting one its `dozing`
  * (src/activity.ts); a rail never has either. A waiting conductor does not doze while a rail in
- * its workspace is working, so a sleeping conductor means its whole batch has stopped.
+ * its workspace is working, so a sleeping conductor means no rail beside it is working.
  */
 export function decideTank(
     world: KelpiWorld,
