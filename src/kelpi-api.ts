@@ -68,6 +68,17 @@ export interface BackendApi {
     workspaces: {
         list(options?: { groupID?: string }): Promise<WorkspaceInfo[]>;
     };
+    /** Daemon state with its event epoch and sequence. */
+    snapshot(): Promise<Snapshot>;
+    /**
+     * Kelpi's command router (its docs/wire-protocol.md). Kelp Tank sends only `workspace-move`.
+     * A reply carries `ok`; a fire-and-forget verb answers `{ ok: true }` once it is queued.
+     */
+    command(payload: Record<string, unknown>): Promise<unknown>;
+    events: {
+        /** Subscribe to a named event, such as `state.changed`. Returns an unsubscribe. */
+        on(name: string, listener: (event: PluginEvent) => void | Promise<void>): () => void;
+    };
     agents: {
         /** One call per agent hook Kelpi handles (`agent.event`). Returns an unsubscribe. */
         onEvent(

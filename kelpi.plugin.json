@@ -4,7 +4,7 @@
   "version": "0.2.3",
   "apiVersion": 1,
   "trust": "full",
-  "activation": "on-demand",
+  "activation": "startup",
   "backend": "backend.mjs",
   "contributes": {
     "views": [
