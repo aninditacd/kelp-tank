@@ -14,7 +14,7 @@ import type { SessionState } from './tank-state';
  * moved, because Kelpi keeps them under their parent.
  */
 
-/** How long the backend waits after a change before it sorts, so a flicker moves nothing. */
+/** How long the backend waits after a change before it sorts, so a flicker that settles moves nothing. */
 export const SORT_DELAY_MS = 2000;
 
 const RANK: Record<SessionState, number> = {

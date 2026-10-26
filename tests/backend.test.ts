@@ -52,6 +52,7 @@ function fakeApi(
     sidebar: Snapshot = snapshotOf([]),
 ) {
     const stateListeners: ((event: PluginEvent) => void)[] = [];
+    const gapListeners: ((event: PluginEvent) => void)[] = [];
     const snapshot = vi.fn(async () => sidebar);
     const command = vi.fn<(payload: Record<string, unknown>) => Promise<unknown>>(async () => ({
         ok: true,
@@ -91,15 +92,25 @@ function fakeApi(
         command,
         events: {
             on: (name: string, listener: (event: PluginEvent) => void) => {
-                if (name !== 'state.changed') return () => {};
-                stateListeners.push(listener);
-                return () => stateListeners.splice(stateListeners.indexOf(listener), 1);
+                const list =
+                    name === 'gap'
+                        ? gapListeners
+                        : name === 'state.changed'
+                          ? stateListeners
+                          : null;
+                if (list === null) return () => {};
+                list.push(listener);
+                return () => list.splice(list.indexOf(listener), 1);
             },
         },
     } as unknown as BackendApi;
     const stateChanged = () => {
         const raw = { epoch: 'e1', sequence: ++sequence, name: 'state.changed', data: {} };
         stateListeners.forEach((listener) => listener(raw));
+    };
+    const gap = () => {
+        const raw = { epoch: 'e1', sequence: ++sequence, name: 'gap', data: {} };
+        gapListeners.forEach((listener) => listener(raw));
     };
     const hear = (event: Partial<AgentHookEvent>) => {
         const data: AgentHookEvent = {
@@ -124,6 +135,7 @@ function fakeApi(
         snapshot,
         command,
         stateChanged,
+        gap,
     };
 }
 
@@ -469,6 +481,51 @@ describe('the sidebar sort', () => {
         stateChanged();
         await afterDelay();
         expect(snapshot).toHaveBeenCalledTimes(1);
+        expect(command).toHaveBeenCalledTimes(1);
+    });
+
+    it('still sorts while a working session changes its title every second', async () => {
+        // A working Claude pane's title spinner fires a state change about once a second.
+        vi.useFakeTimers();
+        const { api, stateChanged, command } = fakeApi([], new Map(), unsorted());
+        activate(api);
+        await afterDelay(); // the start-up sort
+        command.mockClear();
+        for (let second = 0; second < 10; second++) {
+            stateChanged();
+            await vi.advanceTimersByTimeAsync(1000);
+        }
+        expect(command).toHaveBeenCalled();
+    });
+
+    it('sorts after a gap, when Kelpi dropped events', async () => {
+        vi.useFakeTimers();
+        const { api, gap, snapshot } = fakeApi([], new Map(), unsorted());
+        activate(api);
+        await afterDelay();
+        snapshot.mockClear();
+        gap();
+        await afterDelay();
+        expect(snapshot).toHaveBeenCalledTimes(1);
+    });
+
+    it('stopping the backend mid-sort sends no more moves', async () => {
+        vi.useFakeTimers();
+        const sidebar = snapshotOf([
+            ['vault', 'idle'],
+            ['alpha', 'idle'],
+            ['bravo', 'running'],
+            ['charlie', 'waitingForInput'],
+        ]);
+        const { api, command } = fakeApi([], new Map(), sidebar);
+        let release: (value: unknown) => void = () => {};
+        command.mockImplementationOnce(() => new Promise((resolve) => (release = resolve)));
+        const dispose = activate(api);
+        await afterDelay();
+        expect(command).toHaveBeenCalledTimes(1);
+        dispose();
+        release({ ok: true });
+        await afterDelay();
         expect(command).toHaveBeenCalledTimes(1);
     });
 

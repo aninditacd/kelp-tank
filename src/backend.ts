@@ -30,16 +30,17 @@ export function activate(api: BackendApi) {
                 : event.sequence,
         panes,
     });
-    // The sidebar sort (src/auto-sort.ts). Each agent event or state change restarts a short
-    // wait; then one fresh snapshot decides the moves. A change during a sort sorts again after
-    // it. It only ever sends `workspace-move`: it never closes or deletes anything.
+    // The sidebar sort (src/auto-sort.ts). An agent event, state change or `gap` starts a short
+    // wait, which later changes join rather than restart: a working pane's title spinner fires a
+    // state change about once a second, so a restarting wait would never end. Then one fresh
+    // snapshot decides the moves. A change during a sort sorts again after it. It only ever
+    // sends `workspace-move`: it never closes or deletes anything.
     let sortTimer: ReturnType<typeof setTimeout> | null = null;
     let sorting = false;
     let sortAgain = false;
     let stopped = false;
     const sortSoon = () => {
-        if (stopped) return;
-        if (sortTimer !== null) clearTimeout(sortTimer);
+        if (stopped || sortTimer !== null) return;
         sortTimer = setTimeout(() => {
             sortTimer = null;
             void sortSidebar();
@@ -54,6 +55,7 @@ export function activate(api: BackendApi) {
         try {
             const { state } = await api.snapshot();
             for (const { id, index } of sortMoves(worldFromSnapshot(state), quiet)) {
+                if (stopped) break;
                 const reply = await api.command({ command: 'workspace-move', name: id, index });
                 // A refused move leaves later indexes wrong; the next change sorts afresh.
                 if ((reply as { ok?: unknown } | null)?.ok !== true) break;
@@ -69,6 +71,7 @@ export function activate(api: BackendApi) {
         }
     };
     const offState = api.events.on('state.changed', sortSoon);
+    const offGap = api.events.on('gap', sortSoon);
     // A restarted Kelpi may have changed while the backend was down: sort once at start too.
     sortSoon();
 
@@ -140,6 +143,7 @@ export function activate(api: BackendApi) {
         stopped = true;
         if (sortTimer !== null) clearTimeout(sortTimer);
         offState();
+        offGap();
         offEvents();
         offSummary();
         offQuiet();
