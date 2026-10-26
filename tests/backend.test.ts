@@ -1,11 +1,61 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { activate } from '../src/backend';
 import type { AgentBook } from '../src/agents';
-import type { AgentHookEvent, BackendApi, PluginEvent, WorkspaceInfo } from '../src/kelpi-api';
+import { SORT_DELAY_MS } from '../src/auto-sort';
+import type {
+    AgentHookEvent,
+    BackendApi,
+    PluginEvent,
+    Snapshot,
+    SnapshotPane,
+    WorkspaceInfo,
+} from '../src/kelpi-api';
 
 const REPLY = 'Tide table done. Kestrel-marker-7. \nAwaiting you: 0 - nothing';
 
-function fakeApi(workspaces: WorkspaceInfo[] = [], stored = new Map<string, unknown>()) {
+/** A snapshot of top-level workspaces in this order, each with one Claude pane of the given status. */
+function snapshotOf(workspaces: [id: string, status: SnapshotPane['status'] | null][]): Snapshot {
+    return {
+        epoch: 'e1',
+        sequence: 1,
+        state: {
+            workspaces: workspaces.map(([id, status]) => ({
+                id,
+                name: id,
+                color: 'blue',
+                muted: false,
+                parkedPanes: [],
+                panes:
+                    status === null
+                        ? []
+                        : [
+                              {
+                                  id: 'pane-' + id,
+                                  type: 'terminal',
+                                  title: '✳ fish-' + id,
+                                  label: null,
+                                  status,
+                                  agentKind: 'claude',
+                                  agentSessionID: 'session-' + id,
+                              },
+                          ],
+            })),
+            topLevelOrder: workspaces.map(([id]) => ({ kind: 'workspace' as const, id })),
+            groups: [],
+        },
+    };
+}
+
+function fakeApi(
+    workspaces: WorkspaceInfo[] = [],
+    stored = new Map<string, unknown>(),
+    sidebar: Snapshot = snapshotOf([]),
+) {
+    const stateListeners: ((event: PluginEvent) => void)[] = [];
+    const snapshot = vi.fn(async () => sidebar);
+    const command = vi.fn<(payload: Record<string, unknown>) => Promise<unknown>>(async () => ({
+        ok: true,
+    }));
     const handlers = new Map<string, (args?: unknown, context?: unknown) => Promise<unknown>>();
     const listeners: ((event: AgentHookEvent, raw: PluginEvent) => void)[] = [];
     // Kelpi numbers every event in one sequence, Kelp Tank's own emits included.
@@ -37,7 +87,20 @@ function fakeApi(workspaces: WorkspaceInfo[] = [], stored = new Map<string, unkn
         },
         storage: { get: storageGet, set: storageSet },
         emit,
+        snapshot,
+        command,
+        events: {
+            on: (name: string, listener: (event: PluginEvent) => void) => {
+                if (name !== 'state.changed') return () => {};
+                stateListeners.push(listener);
+                return () => stateListeners.splice(stateListeners.indexOf(listener), 1);
+            },
+        },
     } as unknown as BackendApi;
+    const stateChanged = () => {
+        const raw = { epoch: 'e1', sequence: ++sequence, name: 'state.changed', data: {} };
+        stateListeners.forEach((listener) => listener(raw));
+    };
     const hear = (event: Partial<AgentHookEvent>) => {
         const data: AgentHookEvent = {
             type: 'stop',
@@ -50,7 +113,18 @@ function fakeApi(workspaces: WorkspaceInfo[] = [], stored = new Map<string, unkn
         const raw = { epoch: 'e1', sequence: ++sequence, name: 'agent.event', data };
         listeners.forEach((listener) => listener(data, raw));
     };
-    return { api, handlers, hear, storageSet, storageGet, emit, stored };
+    return {
+        api,
+        handlers,
+        hear,
+        storageSet,
+        storageGet,
+        emit,
+        stored,
+        snapshot,
+        command,
+        stateChanged,
+    };
 }
 
 afterEach(() => vi.restoreAllMocks());
@@ -345,5 +419,192 @@ describe('the activity command', () => {
         );
         await settle();
         expect(storageSet.mock.calls.map(([key]) => key)).toEqual(['babyAgents']);
+    });
+});
+
+describe('the sidebar sort', () => {
+    // vault first; bravo needs its owner, so it belongs above the idle alpha.
+    const unsorted = () =>
+        snapshotOf([
+            ['vault', 'idle'],
+            ['alpha', 'idle'],
+            ['bravo', 'waitingForInput'],
+        ]);
+
+    async function afterDelay() {
+        await vi.advanceTimersByTimeAsync(SORT_DELAY_MS);
+    }
+
+    afterEach(() => vi.useRealTimers());
+
+    it('moves a workspace that needs its owner up, after an agent event and the delay', async () => {
+        vi.useFakeTimers();
+        const { api, hear, command } = fakeApi([], new Map(), unsorted());
+        activate(api);
+        hear({ type: 'stop', paneID: 'pane-bravo' });
+        await vi.advanceTimersByTimeAsync(SORT_DELAY_MS - 1);
+        expect(command).not.toHaveBeenCalled();
+        await vi.advanceTimersByTimeAsync(1);
+        expect(command.mock.calls).toEqual([
+            [{ command: 'workspace-move', name: 'bravo', index: 1 }],
+        ]);
+    });
+
+    it('sorts once when the backend starts, with no event yet', async () => {
+        vi.useFakeTimers();
+        const { api, command } = fakeApi([], new Map(), unsorted());
+        activate(api);
+        await afterDelay();
+        expect(command.mock.calls).toEqual([
+            [{ command: 'workspace-move', name: 'bravo', index: 1 }],
+        ]);
+    });
+
+    it('sorts after a state change too, and once for a burst of events', async () => {
+        vi.useFakeTimers();
+        const { api, hear, stateChanged, snapshot, command } = fakeApi([], new Map(), unsorted());
+        activate(api);
+        stateChanged();
+        hear({ type: 'start', status: 'running' });
+        stateChanged();
+        await afterDelay();
+        expect(snapshot).toHaveBeenCalledTimes(1);
+        expect(command).toHaveBeenCalledTimes(1);
+    });
+
+    it('sends nothing when the sidebar is already sorted', async () => {
+        vi.useFakeTimers();
+        const sorted = snapshotOf([
+            ['vault', 'idle'],
+            ['bravo', 'waitingForInput'],
+            ['alpha', 'idle'],
+        ]);
+        const { api, stateChanged, snapshot, command } = fakeApi([], new Map(), sorted);
+        activate(api);
+        stateChanged();
+        await afterDelay();
+        expect(snapshot).toHaveBeenCalledTimes(1);
+        expect(command).not.toHaveBeenCalled();
+    });
+
+    it('ranks a pane whose last reply ended Awaiting you: 0 as an update, below working', async () => {
+        vi.useFakeTimers();
+        const sidebar = snapshotOf([
+            ['vault', null],
+            ['quiet', 'waitingForInput'],
+            ['busy', 'running'],
+        ]);
+        const { api, hear, command } = fakeApi([], new Map(), sidebar);
+        activate(api);
+        hear({ paneID: 'pane-quiet', lastAssistantMessage: REPLY });
+        await afterDelay();
+        expect(command.mock.calls).toEqual([
+            [{ command: 'workspace-move', name: 'busy', index: 1 }],
+        ]);
+    });
+
+    it('stops the batch when Kelpi refuses a move, and tries again on the next change', async () => {
+        vi.useFakeTimers();
+        const sidebar = snapshotOf([
+            ['vault', 'idle'],
+            ['alpha', 'idle'],
+            ['bravo', 'running'],
+            ['charlie', 'waitingForInput'],
+        ]);
+        const { api, stateChanged, command } = fakeApi([], new Map(), sidebar);
+        command.mockResolvedValueOnce({ ok: false, error: 'no' });
+        activate(api);
+        stateChanged();
+        await afterDelay();
+        expect(command).toHaveBeenCalledTimes(1);
+        command.mockRejectedValueOnce(new Error('socket gone'));
+        stateChanged();
+        await afterDelay();
+        expect(command).toHaveBeenCalledTimes(2);
+        stateChanged();
+        await afterDelay();
+        expect(command.mock.calls.slice(2)).toEqual([
+            [{ command: 'workspace-move', name: 'charlie', index: 1 }],
+            [{ command: 'workspace-move', name: 'bravo', index: 2 }],
+        ]);
+    });
+
+    it('skips a sort when the snapshot fails, and tries again on the next change', async () => {
+        vi.useFakeTimers();
+        const { api, stateChanged, snapshot, command } = fakeApi([], new Map(), unsorted());
+        snapshot.mockRejectedValueOnce(new Error('daemon busy'));
+        activate(api);
+        stateChanged();
+        await afterDelay();
+        expect(command).not.toHaveBeenCalled();
+        stateChanged();
+        await afterDelay();
+        expect(command).toHaveBeenCalledTimes(1);
+    });
+
+    it('only ever sends workspace moves, never a close or a delete', async () => {
+        vi.useFakeTimers();
+        const sidebar = snapshotOf([
+            ['vault', null],
+            ['a', 'idle'],
+            ['b', null],
+            ['c', 'running'],
+            ['d', 'waitingForInput'],
+        ]);
+        sidebar.state.topLevelOrder = [{ kind: 'group', id: 'g' }];
+        sidebar.state.groups = [
+            { id: 'g', childOrder: ['vault', 'a', 'b', 'c', 'd'], isCollapsed: true },
+        ];
+        const { api, stateChanged, command } = fakeApi([], new Map(), sidebar);
+        activate(api);
+        stateChanged();
+        await afterDelay();
+        expect(command).toHaveBeenCalledTimes(5);
+        for (const [payload] of command.mock.calls) {
+            expect(Object.keys(payload).sort()).toEqual(['command', 'index', 'name']);
+            expect(payload.command).toBe('workspace-move');
+        }
+    });
+
+    it('a change while a sort is running sorts again afterwards', async () => {
+        vi.useFakeTimers();
+        const { api, stateChanged, snapshot, command } = fakeApi([], new Map(), unsorted());
+        let release: (value: unknown) => void = () => {};
+        command.mockImplementationOnce(() => new Promise((resolve) => (release = resolve)));
+        activate(api);
+        stateChanged();
+        await afterDelay();
+        stateChanged();
+        await afterDelay();
+        expect(snapshot).toHaveBeenCalledTimes(1);
+        release({ ok: true });
+        await afterDelay();
+        expect(snapshot).toHaveBeenCalledTimes(2);
+    });
+
+    it('stopping the backend during a sort schedules no more sorts', async () => {
+        vi.useFakeTimers();
+        const { api, stateChanged, snapshot, command } = fakeApi([], new Map(), unsorted());
+        let release: (value: unknown) => void = () => {};
+        command.mockImplementationOnce(() => new Promise((resolve) => (release = resolve)));
+        const dispose = activate(api);
+        stateChanged();
+        await afterDelay();
+        stateChanged();
+        await afterDelay(); // fires while the first sort still waits on Kelpi
+        dispose();
+        release({ ok: true });
+        await afterDelay();
+        expect(snapshot).toHaveBeenCalledTimes(1);
+    });
+
+    it('stopping the backend cancels a waiting sort', async () => {
+        vi.useFakeTimers();
+        const { api, stateChanged, snapshot } = fakeApi([], new Map(), unsorted());
+        const dispose = activate(api);
+        stateChanged();
+        dispose();
+        await afterDelay();
+        expect(snapshot).not.toHaveBeenCalled();
     });
 });

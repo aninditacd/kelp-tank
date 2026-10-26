@@ -1,6 +1,8 @@
 import { recordAgentEvent, recordTool, type ActivityAnswer } from './activity';
 import { applyHook, EMPTY_BOOK, parseHookArgv, readBook, type AgentBook } from './agents';
+import { SORT_DELAY_MS, sortMoves } from './auto-sort';
 import type { BackendApi, CliInvocation, CliResult, PluginEvent } from './kelpi-api';
+import { worldFromSnapshot } from './kelpi-world';
 import { quietAfter } from './quiet';
 
 /** Where the agent book is saved, so a restarted backend keeps its baby fish. */
@@ -28,9 +30,52 @@ export function activate(api: BackendApi) {
                 : event.sequence,
         panes,
     });
+    // The sidebar sort (src/auto-sort.ts). Each agent event or state change restarts a short
+    // wait; then one fresh snapshot decides the moves. A change during a sort sorts again after
+    // it. It only ever sends `workspace-move`: it never closes or deletes anything.
+    let sortTimer: ReturnType<typeof setTimeout> | null = null;
+    let sorting = false;
+    let sortAgain = false;
+    let stopped = false;
+    const sortSoon = () => {
+        if (stopped) return;
+        if (sortTimer !== null) clearTimeout(sortTimer);
+        sortTimer = setTimeout(() => {
+            sortTimer = null;
+            void sortSidebar();
+        }, SORT_DELAY_MS);
+    };
+    const sortSidebar = async () => {
+        if (sorting) {
+            sortAgain = true;
+            return;
+        }
+        sorting = true;
+        try {
+            const { state } = await api.snapshot();
+            for (const { id, index } of sortMoves(worldFromSnapshot(state), quiet)) {
+                const reply = await api.command({ command: 'workspace-move', name: id, index });
+                // A refused move leaves later indexes wrong; the next change sorts afresh.
+                if ((reply as { ok?: unknown } | null)?.ok !== true) break;
+            }
+        } catch {
+            // No snapshot, or no daemon: the next change tries again.
+        } finally {
+            sorting = false;
+            if (sortAgain) {
+                sortAgain = false;
+                sortSoon();
+            }
+        }
+    };
+    const offState = api.events.on('state.changed', sortSoon);
+    // A restarted Kelpi may have changed while the backend was down: sort once at start too.
+    sortSoon();
+
     const offEvents = api.agents.onEvent((event, raw) => {
         quiet = quietAfter(quiet, event);
         activity = covered(recordAgentEvent(activity.panes, event.sessionID ?? null, event), raw);
+        sortSoon();
     });
     const offSummary = api.commands.register('dita.kelp-tank.summary', async () => ({
         workspaces: await api.workspaces.list(),
@@ -92,6 +137,9 @@ export function activate(api: BackendApi) {
         return book;
     });
     return () => {
+        stopped = true;
+        if (sortTimer !== null) clearTimeout(sortTimer);
+        offState();
         offEvents();
         offSummary();
         offQuiet();
