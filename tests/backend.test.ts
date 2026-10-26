@@ -435,11 +435,11 @@ describe('the activity command', () => {
 });
 
 describe('the sidebar sort', () => {
-    // vault first; bravo needs its owner, so it belongs above the idle alpha.
+    // vault first; bravo has a session and alpha has none, so bravo belongs above alpha.
     const unsorted = () =>
         snapshotOf([
             ['vault', 'idle'],
-            ['alpha', 'idle'],
+            ['alpha', null],
             ['bravo', 'waitingForInput'],
         ]);
 
@@ -449,7 +449,7 @@ describe('the sidebar sort', () => {
 
     afterEach(() => vi.useRealTimers());
 
-    it('moves a workspace that needs its owner up, after an agent event and the delay', async () => {
+    it('moves a workspace with a session up, after an agent event and the delay', async () => {
         vi.useFakeTimers();
         const { api, hear, command } = fakeApi([], new Map(), unsorted());
         activate(api);
@@ -513,7 +513,7 @@ describe('the sidebar sort', () => {
         vi.useFakeTimers();
         const sidebar = snapshotOf([
             ['vault', 'idle'],
-            ['alpha', 'idle'],
+            ['alpha', null],
             ['bravo', 'running'],
             ['charlie', 'waitingForInput'],
         ]);
@@ -544,27 +544,27 @@ describe('the sidebar sort', () => {
         expect(command).not.toHaveBeenCalled();
     });
 
-    it('ranks a pane whose last reply ended Awaiting you: 0 as an update, below working', async () => {
+    it('moves nothing when sessions change state but none starts or ends', async () => {
         vi.useFakeTimers();
         const sidebar = snapshotOf([
             ['vault', null],
-            ['quiet', 'waitingForInput'],
+            ['idle', 'idle'],
             ['busy', 'running'],
+            ['needs', 'waitingForInput'],
         ]);
         const { api, hear, command } = fakeApi([], new Map(), sidebar);
         activate(api);
-        hear({ paneID: 'pane-quiet', lastAssistantMessage: REPLY });
+        hear({ paneID: 'pane-needs', lastAssistantMessage: REPLY });
+        hear({ paneID: 'pane-busy', type: 'start', status: 'running' });
         await afterDelay();
-        expect(command.mock.calls).toEqual([
-            [{ command: 'workspace-move', name: 'busy', index: 1 }],
-        ]);
+        expect(command).not.toHaveBeenCalled();
     });
 
     it('stops the batch when Kelpi refuses a move, and tries again on the next change', async () => {
         vi.useFakeTimers();
         const sidebar = snapshotOf([
             ['vault', 'idle'],
-            ['alpha', 'idle'],
+            ['alpha', null],
             ['bravo', 'running'],
             ['charlie', 'waitingForInput'],
         ]);
@@ -581,8 +581,8 @@ describe('the sidebar sort', () => {
         stateChanged();
         await afterDelay();
         expect(command.mock.calls.slice(2)).toEqual([
-            [{ command: 'workspace-move', name: 'charlie', index: 1 }],
-            [{ command: 'workspace-move', name: 'bravo', index: 2 }],
+            [{ command: 'workspace-move', name: 'bravo', index: 1 }],
+            [{ command: 'workspace-move', name: 'charlie', index: 2 }],
         ]);
     });
 

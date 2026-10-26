@@ -55,97 +55,109 @@ function applyMoves(start: KelpiWorld, moves: readonly SortMove[]): KelpiWorld {
     return { ...start, topLevelOrder: top, groups };
 }
 
+const NONE = { agentKind: null, agentSessionId: null } as const;
+
 describe('the order the sidebar should have', () => {
-    it('ranks needs you, then working, then update, then idle, then no session', () => {
+    it('brings a new session up past the workspaces with none, to just under the last active one', () => {
+        // Vault and timekeep have sessions; a kelp session starts at 9, past six without one.
+        const ids = ['vault', 'timekeep', 'n3', 'n4', 'n5', 'n6', 'n7', 'n8', 'kelp'];
         const panes = [
-            pane('pIdle', 'idle', { status: 'idle' }),
-            pane('pNone', 'none', { agentKind: null, agentSessionId: null }),
-            pane('pUpdate', 'update'),
-            pane('pWorking', 'working', { status: 'running' }),
-            pane('pNeeds', 'needs'),
+            pane('p1', 'vault', { status: 'idle' }),
+            pane('p2', 'timekeep', { status: 'running' }),
+            ...['n3', 'n4', 'n5', 'n6', 'n7', 'n8'].map((id) => pane('x' + id, id, NONE)),
+            pane('p9', 'kelp', { status: 'running' }),
         ];
-        const order = ['pinned', 'none', 'idle', 'update', 'working', 'needs'];
-        expect(sortTarget(world(order, panes), new Set(['pUpdate']))).toEqual([
+        expect(sortTarget(world(ids, panes))).toEqual([
+            'vault',
+            'timekeep',
+            'kelp',
+            'n3',
+            'n4',
+            'n5',
+            'n6',
+            'n7',
+            'n8',
+        ]);
+    });
+
+    it('never reorders workspaces with sessions among themselves, whatever their states', () => {
+        // An idle one above a working one above one that needs its owner stays as it is.
+        const panes = [
+            pane('p1', 'idle', { status: 'idle' }),
+            pane('p2', 'working', { status: 'running' }),
+            pane('p3', 'needs'),
+        ];
+        expect(sortTarget(world(['pinned', 'idle', 'working', 'needs'], panes))).toEqual([
             'pinned',
-            'needs',
-            'working',
-            'update',
             'idle',
-            'none',
+            'working',
+            'needs',
         ]);
     });
 
-    it('keeps the first workspace first, even when it is idle and another needs its owner', () => {
-        const panes = [pane('p1', 'vault', { status: 'idle' }), pane('p2', 'b')];
-        expect(sortTarget(world(['vault', 'b'], panes), new Set())).toEqual(['vault', 'b']);
+    it('keeps the first workspace first, even with no session', () => {
+        const panes = [pane('p1', 'vault', NONE), pane('p2', 'b')];
+        expect(sortTarget(world(['vault', 'a', 'b'], panes))).toEqual(['vault', 'b', 'a']);
     });
 
-    it('ranks a workspace by its most urgent session', () => {
-        const panes = [
-            pane('p1', 'a', { status: 'running' }),
-            pane('p2', 'b'),
-            pane('p3', 'b', { status: 'idle' }),
-        ];
-        expect(sortTarget(world(['pinned', 'a', 'b'], panes), new Set())).toEqual([
-            'pinned',
-            'b',
-            'a',
-        ]);
-    });
-
-    it('ranks a closed session, with its pane still open, as no session', () => {
+    it('counts a closed session, with its pane still open, as no session', () => {
         const panes = [
             pane('p1', 'closed', { agentSessionId: null }),
-            pane('p2', 'idle', { status: 'idle' }),
+            pane('p2', 'live', { status: 'idle' }),
         ];
-        expect(sortTarget(world(['pinned', 'closed', 'idle'], panes), new Set())).toEqual([
+        expect(sortTarget(world(['pinned', 'closed', 'live'], panes))).toEqual([
             'pinned',
-            'idle',
+            'live',
             'closed',
         ]);
     });
 
-    it('keeps the current order between workspaces of the same rank', () => {
-        const panes = [pane('p1', 'c'), pane('p2', 'a'), pane('p3', 'b')];
-        expect(sortTarget(world(['pinned', 'c', 'a', 'b'], panes), new Set())).toEqual([
-            'pinned',
-            'c',
-            'a',
-            'b',
-        ]);
+    it('keeps the order among workspaces with no session', () => {
+        expect(sortTarget(world(['pinned', 'c', 'a', 'b'], []))).toEqual(['pinned', 'c', 'a', 'b']);
     });
 
     it('leaves out a nested workspace, which moves with its parent', () => {
         // Kelpi lists a nested workspace in its parent's own child order only.
         const panes = [pane('p1', 'nested')];
         const w = world(['pinned', 'parent', 'nested'], panes, [ws('pinned'), ws('parent')]);
-        expect(sortTarget(w, new Set())).toEqual(['pinned', 'parent']);
+        expect(sortTarget(w)).toEqual(['pinned', 'parent']);
     });
 });
 
 describe('the moves that get it there', () => {
-    it('sends nothing when the sidebar is already sorted and flat', () => {
-        const panes = [pane('p1', 'b'), pane('p2', 'c', { status: 'idle' })];
-        expect(sortMoves(world(['a', 'b', 'c'], panes), new Set())).toEqual([]);
+    it('sends nothing when every session is already above every workspace without one', () => {
+        const panes = [pane('p1', 'b'), pane('p2', 'c', { status: 'idle' }), pane('p3', 'd', NONE)];
+        expect(sortMoves(world(['a', 'b', 'c', 'd'], panes))).toEqual([]);
     });
 
     it('sends nothing for an empty or one-workspace sidebar', () => {
-        expect(sortMoves(world([], []), new Set())).toEqual([]);
-        expect(sortMoves(world(['a'], [pane('p', 'a')]), new Set())).toEqual([]);
+        expect(sortMoves(world([], []))).toEqual([]);
+        expect(sortMoves(world(['a'], [pane('p', 'a')]))).toEqual([]);
     });
 
-    it('moves a workspace up when its session starts needing its owner', () => {
-        const panes = [pane('p1', 'b', { status: 'idle' }), pane('p2', 'c')];
-        const start = world(['a', 'b', 'c'], panes);
-        const moves = sortMoves(start, new Set());
+    it('moves one workspace up when its session starts', () => {
+        const start = world(['a', 'b', 'c'], [pane('p1', 'c')]);
+        const moves = sortMoves(start);
         expect(moves).toEqual([{ id: 'c', index: 1 }]);
         expect(sidebarOrder(applyMoves(start, moves))).toEqual(['a', 'c', 'b']);
     });
 
-    it('takes every workspace out of its group, collapsed or not, into one sorted list', () => {
+    it('lets a workspace whose session ended fall below the ones still active', () => {
+        const panes = [pane('p1', 'a'), pane('p2', 'b', NONE), pane('p3', 'c'), pane('p4', 'd')];
+        const start = world(['pinned', 'a', 'b', 'c', 'd'], panes);
+        expect(sidebarOrder(applyMoves(start, sortMoves(start)))).toEqual([
+            'pinned',
+            'a',
+            'c',
+            'd',
+            'b',
+        ]);
+    });
+
+    it('takes every workspace out of its group, collapsed or not, into one list', () => {
         const panes = [
             pane('p1', 'vault', { status: 'idle' }),
-            pane('p2', 'x', { status: 'idle' }),
+            pane('p2', 'x', NONE),
             pane('p3', 'y', { status: 'running' }),
             pane('p4', 'z'),
         ];
@@ -158,13 +170,13 @@ describe('the moves that get it there', () => {
                 queue: { childOrder: ['y', 'z'], isCollapsed: true },
             },
         );
-        const after = applyMoves(start, sortMoves(start, new Set()));
-        const expected = ['vault', 'z', 'y', 'x', 'loose'];
+        const after = applyMoves(start, sortMoves(start));
+        const expected = ['vault', 'y', 'z', 'x', 'loose'];
         expect(after.topLevelOrder.slice(0, 5)).toEqual(expected.map(ws));
         expect(after.groups.ops.childOrder).toEqual([]);
         expect(after.groups.queue.childOrder).toEqual([]);
-        // Sorted and flat now, so the next run sends nothing.
-        expect(sortMoves(after, new Set())).toEqual([]);
+        // Flat and in order now, so the next run sends nothing.
+        expect(sortMoves(after)).toEqual([]);
     });
 
     it('never moves a nested workspace', () => {
@@ -172,7 +184,7 @@ describe('the moves that get it there', () => {
         const start = world(['pinned', 'parent', 'nested'], panes, [grp('g')], {
             g: { childOrder: ['pinned', 'parent'], isCollapsed: false },
         });
-        const moves = sortMoves(start, new Set());
+        const moves = sortMoves(start);
         expect(moves.map((move) => move.id)).not.toContain('nested');
         expect(moves).toEqual([
             { id: 'pinned', index: 0 },

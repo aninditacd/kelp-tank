@@ -54,7 +54,7 @@ export function activate(api: BackendApi) {
         sorting = true;
         try {
             const { state } = await api.snapshot();
-            for (const { id, index } of sortMoves(worldFromSnapshot(state), quiet)) {
+            for (const { id, index } of sortMoves(worldFromSnapshot(state))) {
                 if (stopped) break;
                 const reply = await api.command({ command: 'workspace-move', name: id, index });
                 // A refused move leaves later indexes wrong; the next change sorts afresh.

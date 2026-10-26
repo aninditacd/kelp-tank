@@ -1,30 +1,20 @@
-import { decideTank } from './decide-tank';
 import type { SidebarId } from './kelpi-api';
 import type { KelpiWorld } from './kelpi-world';
-import type { SessionState } from './tank-state';
 
 /**
- * Sorts Kelpi's sidebar by Claude session state (issue #25), so the sessions that need the owner
- * sit under the ⌘1 to ⌘9 shortcuts. Pure logic; the backend sends the moves.
+ * Sorts Kelpi's sidebar (issue #25), so the workspaces with a Claude session sit under the ⌘1 to
+ * ⌘9 shortcuts. Pure logic; the backend sends the moves.
  *
- * The first workspace in the sidebar stays first. Every other one is ranked by its most urgent
- * session, as the tank shows it: needs you, working, update, idle, then no live session. Ties
- * keep their current order, so nothing moves until a workspace's rank changes. The result is
- * one flat list: grouped workspaces are taken out of their groups. Nested workspaces are never
- * moved, because Kelpi keeps them under their parent.
+ * The first workspace in the sidebar stays first. A workspace with a live Claude session moves up
+ * past the workspaces without one, to just under the last one with a session. Workspaces with
+ * sessions never reorder among themselves, whatever their sessions are doing, and neither do
+ * the ones without. So a workspace whose session ended falls below the ones still active. The
+ * result is one flat list: grouped workspaces are taken out of their groups. Nested workspaces
+ * are never moved, because Kelpi keeps them under their parent.
  */
 
-/** How long the backend waits after a change before it sorts, so a flicker that settles moves nothing. */
+/** How long the backend waits after a change before it sorts, so a session that only blinks moves nothing. */
 export const SORT_DELAY_MS = 2000;
-
-const RANK: Record<SessionState, number> = {
-    wantsYou: 0,
-    working: 1,
-    update: 2,
-    idle: 3,
-    closed: 4,
-};
-const NO_SESSION = 4;
 
 /** One `workspace-move` to the top level, at an index read after the workspace is detached. */
 export interface SortMove {
@@ -42,25 +32,21 @@ function movable(world: KelpiWorld): string[] {
         .filter((id) => known.has(id));
 }
 
-/** The flat order the sidebar should have: the first workspace, then the rest by rank. */
-export function sortTarget(world: KelpiWorld, quiet: ReadonlySet<string>): string[] {
+/** The flat order the sidebar should have: the first workspace, then those with a session, then the rest. */
+export function sortTarget(world: KelpiWorld): string[] {
     const [pinned, ...rest] = movable(world);
     if (pinned === undefined) return [];
-    const rank = new Map<string, number>();
-    for (const session of decideTank(world, null, undefined, quiet).sessions) {
-        const best = rank.get(session.workspaceId) ?? NO_SESSION;
-        rank.set(session.workspaceId, Math.min(best, RANK[session.state]));
-    }
-    const sorted = rest
-        .map((id) => ({ id, rank: rank.get(id) ?? NO_SESSION }))
-        .sort((a, b) => a.rank - b.rank) // stable, so ties keep their order
-        .map(({ id }) => id);
-    return [pinned, ...sorted];
+    const live = new Set(
+        world.panes
+            .filter((pane) => pane.agentKind !== null && pane.agentSessionId !== null)
+            .map((pane) => pane.workspaceId),
+    );
+    return [pinned, ...rest.filter((id) => live.has(id)), ...rest.filter((id) => !live.has(id))];
 }
 
 /** The moves that turn the sidebar into `sortTarget`'s order, at the top level. Empty when it is already. */
-export function sortMoves(world: KelpiWorld, quiet: ReadonlySet<string>): SortMove[] {
-    const target = sortTarget(world, quiet);
+export function sortMoves(world: KelpiWorld): SortMove[] {
+    const target = sortTarget(world);
     let top: SidebarId[] = [...world.topLevelOrder];
     const moves: SortMove[] = [];
     target.forEach((id, index) => {
