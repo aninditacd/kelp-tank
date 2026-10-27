@@ -1,13 +1,17 @@
-// The four creatures, ported from Dita's approved preview. Not unit-tested: WebGL. They are
+// The creatures, ported from Dita's approved preview. Not unit-tested: WebGL. They are
 // checked by screenshots from Kelpi's private instance.
 import {
+    BoxGeometry,
     ConeGeometry,
     CylinderGeometry,
     DoubleSide,
     Group,
     Mesh,
     MeshBasicMaterial,
+    type MeshToonMaterial,
+    Quaternion,
     SphereGeometry,
+    TorusGeometry,
     Vector3,
 } from 'three';
 import type { SessionRole, TankSession } from '../tank-state';
@@ -15,6 +19,7 @@ import { blob, mix, toon } from './toon';
 
 const CONE4 = new ConeGeometry(1, 1, 4);
 const CONE5 = new ConeGeometry(1, 1, 5);
+const CONE8 = new ConeGeometry(1, 1, 8);
 const WHITE = new MeshBasicMaterial({ color: 0xffffff });
 const BLACK = new MeshBasicMaterial({ color: 0x1b1b2a });
 const PINK = new MeshBasicMaterial({ color: 0xff9fb5, transparent: true, opacity: 0.8 });
@@ -27,12 +32,20 @@ export const SIZE: Record<SessionRole, number> = {
     conductor: 0.17,
     rail: 0.055,
     fish: 0.12,
+    brainstorming: 0.12,
+    building: 0.12,
+    researching: 0.13,
+    reviewing: 0.12,
 };
 export const NOSE: Record<SessionRole, number> = {
     day: 1.75,
     conductor: 1.05,
     rail: 1.2,
     fish: 1.2,
+    brainstorming: 1.2,
+    building: 1.2,
+    researching: 1.3,
+    reviewing: 1.15,
 };
 
 export interface Creature {
@@ -59,7 +72,17 @@ export function setLids(creature: Creature, closure: number) {
     }
 }
 
-function eyes(g: Group, x: number, y: number, z: number, r: number, lidHex: string, lids: Mesh[]) {
+function eyes(
+    g: Group,
+    x: number,
+    y: number,
+    z: number,
+    r: number,
+    lidHex: string,
+    lids: Mesh[],
+    /** How far forward the pupils look: higher looks straight ahead, as through glasses. */
+    forward = 0.55,
+) {
     for (const s of [1, -1]) {
         g.add(
             blob(WHITE, r, r, r)
@@ -67,7 +90,7 @@ function eyes(g: Group, x: number, y: number, z: number, r: number, lidHex: stri
                 .translateY(y)
                 .translateZ(z * s),
         );
-        const dir = new Vector3(0.55, 0.05, 0.83 * s).normalize();
+        const dir = new Vector3(forward, 0.05, 0.83 * s).normalize();
         const p = dir.clone().multiplyScalar(r * 0.6);
         g.add(
             blob(BLACK, r * 0.55, r * 0.6, r * 0.55)
@@ -94,7 +117,7 @@ function eyes(g: Group, x: number, y: number, z: number, r: number, lidHex: stri
 
 function cone(
     geometry: ConeGeometry,
-    material: ReturnType<typeof toon>,
+    material: MeshToonMaterial | MeshBasicMaterial,
     sx: number,
     sy: number,
     sz: number,
@@ -248,16 +271,187 @@ function buildTurtle(color: string) {
     return { group: g, head, front, back, lids, top: 0.75 };
 }
 
+// The work-kind fish: the plain fish with one prop, from the preview Dita picked on 27 Oct 2026.
+// Hats sit on a dome whose rim is just under the skin, so the head fills it and nothing pokes
+// through.
+
+/** The plain fish's body radii, which the hats sit on. */
+const BODY = new Vector3(1.2, 1, 0.85);
+/** Where a hat sits: the top of the head, a little forward. A direction on the unit sphere. */
+const HEAD = new Vector3(0.32, 0.95, 0).normalize();
+const UP = new Vector3(0, 1, 0);
+
+/** The point on the body's surface (scaled by `k`) in unit-sphere direction `d`, and the normal there. */
+function onBody(d: Vector3, k = 1) {
+    const point = new Vector3(d.x * BODY.x * k, d.y * BODY.y * k, d.z * BODY.z * k);
+    const normal = new Vector3(d.x / BODY.x, d.y / BODY.y, d.z / BODY.z).normalize();
+    return { point, normal };
+}
+
+function twoSided(hex: string): MeshToonMaterial {
+    const material = toon(hex).clone();
+    material.side = DoubleSide;
+    return material;
+}
+
+/** A half dome on the head, `w` wide and `h` tall, its rim sunk `sink` under the skin. */
+function dome(
+    material: MeshToonMaterial,
+    w: number,
+    h: number,
+    sink: number,
+    phiStart = 0,
+    phiLength = Math.PI * 2,
+) {
+    const { point, normal } = onBody(HEAD);
+    const mesh = new Mesh(
+        new SphereGeometry(1, 28, 12, phiStart, phiLength, 0, Math.PI / 2),
+        material,
+    );
+    mesh.scale.set(w, h, w);
+    mesh.position.copy(point).addScaledVector(normal, -sink);
+    mesh.quaternion.copy(new Quaternion().setFromUnitVectors(UP, normal));
+    return mesh;
+}
+
+function buildWizard(color: string) {
+    const parts = buildFish(color);
+    const navy = twoSided('#34407a');
+    const gold = new MeshBasicMaterial({ color: 0xffe27a });
+    parts.group.add(dome(navy, 0.46, 0.2, 0.08));
+    const { point, normal } = onBody(HEAD, 1.08);
+    const hat = new Group();
+    hat.position.copy(point);
+    hat.quaternion.setFromUnitVectors(UP, normal);
+    const tip = new Group();
+    tip.rotation.z = 0.25;
+    tip.add(cone(CONE8, navy, 0.4, 1.0, 0.4, 0, 0.48, 0));
+    tip.add(at(blob(gold, 0.09, 0.09, 0.09), 0, 1.0, 0));
+    for (const [y, a, s] of [
+        [0.3, 0.9, 0.07],
+        [0.6, -0.4, 0.055],
+        [0.22, -1.7, 0.05],
+    ] as const) {
+        const r = 0.4 * (1 - y) + 0.01;
+        tip.add(at(blob(gold, s, s, s * 0.5), Math.sin(a) * r, y, Math.cos(a) * r));
+    }
+    hat.add(tip);
+    parts.group.add(hat);
+    return { ...parts, top: 1.9 };
+}
+
+function buildHardHat(color: string) {
+    const parts = buildFish(color);
+    const yellow = twoSided('#ffc93c');
+    const angle = 0.5;
+    parts.group.add(dome(yellow, 0.6, 0.46, 0.1));
+    const top = onBody(HEAD, 1.33);
+    const ridge = blob(toon('#eaa21c'), 0.5, 0.1, 0.1);
+    ridge.position.copy(top.point);
+    ridge.quaternion.setFromUnitVectors(UP, top.normal);
+    parts.group.add(ridge);
+    // The peak juts forward from the helmet's front edge, flat on the tangent there, so it never
+    // dips into the body.
+    const a = Math.atan2(HEAD.x, HEAD.y) + angle;
+    const edge = onBody(new Vector3(Math.sin(a), Math.cos(a), 0), 1.06);
+    const tangent = new Vector3(edge.normal.y, -edge.normal.x, 0);
+    const peak = blob(yellow, 0.3, 0.04, 0.48);
+    peak.position.copy(edge.point).addScaledVector(tangent, 0.2).addScaledVector(edge.normal, 0.04);
+    peak.quaternion.setFromUnitVectors(UP, edge.normal);
+    parts.group.add(peak);
+    return { ...parts, top: 1.45 };
+}
+
+function buildAngler(color: string) {
+    const parts = buildFish(color);
+    const g = parts.group;
+    g.add(at(blob(new MeshBasicMaterial({ color: 0x2a1530 }), 0.32, 0.18, 0.45), 1.0, -0.32, 0));
+    for (let i = -2; i <= 2; i++) {
+        const tooth = cone(CONE4, WHITE, 0.05, 0.12, 0.05, 1.12, -0.2, i * 0.13, Math.PI);
+        g.add(tooth);
+    }
+    const stalk = toon(mix(color, '#000000', 0.15));
+    const lure = new Group();
+    lure.position.set(0.3, 0.95, 0);
+    for (const [x, y] of [
+        [0, 0],
+        [0.18, 0.28],
+        [0.45, 0.42],
+        [0.75, 0.38],
+        [0.95, 0.22],
+    ] as const) {
+        lure.add(at(blob(stalk, 0.06, 0.06, 0.06), x, y, 0));
+    }
+    lure.add(at(blob(new MeshBasicMaterial({ color: 0xfff1a0 }), 0.15, 0.15, 0.15), 1.02, 0.1, 0));
+    const halo = new MeshBasicMaterial({
+        color: 0xffe066,
+        transparent: true,
+        opacity: 0.28,
+        depthWrite: false,
+    });
+    lure.add(at(blob(halo, 0.3, 0.3, 0.3), 1.02, 0.1, 0));
+    g.add(lure);
+    return { ...parts, top: 1.35 };
+}
+
+function buildSpectacled(color: string) {
+    const g = new Group();
+    const lids: Mesh[] = [];
+    const body = toon(color);
+    const fin = toon(mix(color, '#ffffff', 0.25));
+    g.add(new Mesh(new BoxGeometry(1.35, 1.05, 0.95), body));
+    g.add(at(blob(body, 0.95, 0.72, 0.66), 0.05, 0, 0));
+    g.add(at(blob(toon(mix(color, '#ffffff', 0.55)), 0.8, 0.35, 0.6), 0.1, -0.45, 0));
+    const tail = new Group();
+    tail.position.x = -0.95;
+    tail.add(cone(CONE4, fin, 0.45, 0.6, 0.16, -0.3, 0, 0, -Math.PI / 2));
+    g.add(tail);
+    const fins: Group[] = [];
+    for (const s of [1, -1]) {
+        const f = new Group();
+        f.position.set(0.3, -0.25, 0.64 * s);
+        f.add(at(blob(fin, 0.26, 0.08, 0.15), -0.12, 0, 0.06 * s));
+        g.add(f);
+        fins.push(f);
+    }
+    eyes(g, 0.86, 0.25, 0.33, 0.3, color, lids, 1.2);
+    for (const s of [1, -1]) {
+        const ring = new Mesh(new TorusGeometry(0.33, 0.04, 8, 28), BLACK);
+        ring.position.set(1.0, 0.25, 0.33 * s);
+        ring.rotation.y = Math.PI / 2 - 0.35 * s;
+        g.add(ring);
+        g.add(at(blob(BLACK, 0.4, 0.025, 0.025), 0.7, 0.28, 0.63 * s));
+    }
+    g.add(at(blob(BLACK, 0.025, 0.025, 0.12), 1.05, 0.3, 0));
+    for (const s of [1, -1]) g.add(at(blob(PINK, 0.12, 0.06, 0.03), 0.95, -0.15, 0.58 * s));
+    g.add(at(blob(BLACK, 0.05, 0.04, 0.1), 0.92, -0.3, 0));
+    return { group: g, tail, fins, lids, top: 0.75 };
+}
+
+function buildFor(role: SessionRole, colorHex: string) {
+    switch (role) {
+        case 'day':
+            return buildTurtle(colorHex);
+        case 'conductor':
+            return buildPuffer(colorHex);
+        case 'rail':
+            return buildFish(mix(colorHex, '#ffffff', 0.2), 0.34);
+        case 'brainstorming':
+            return buildWizard(colorHex);
+        case 'building':
+            return buildHardHat(colorHex);
+        case 'researching':
+            return buildAngler(colorHex);
+        case 'reviewing':
+            return buildSpectacled(colorHex);
+        case 'fish':
+            return buildFish(colorHex);
+    }
+}
+
 /** Builds the creature for a session, tinted with its workspace's colour, tagged with its pane id. */
 export function makeCreature(session: TankSession, colorHex: string): Creature {
-    const parts =
-        session.role === 'day'
-            ? buildTurtle(colorHex)
-            : session.role === 'conductor'
-              ? buildPuffer(colorHex)
-              : session.role === 'rail'
-                ? buildFish(mix(colorHex, '#ffffff', 0.2), 0.34)
-                : buildFish(colorHex);
+    const parts = buildFor(session.role, colorHex);
     const scale = SIZE[session.role];
     parts.group.scale.setScalar(scale);
     parts.group.userData.paneId = session.paneId;

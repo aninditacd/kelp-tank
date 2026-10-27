@@ -23,8 +23,20 @@ export type Goal =
     | { kind: 'follow'; leader: string; slot: number }
     | { kind: 'leave' };
 
-/** Swim speeds in world units a second, from Dita's approved preview. */
-const SPEED: Record<SessionRole, number> = { day: 0.22, conductor: 0.28, rail: 0.4, fish: 0.34 };
+/**
+ * Swim speeds in world units a second, from Dita's approved preview. The four work-kind fish swim
+ * like the plain fish.
+ */
+const SPEED: Record<SessionRole, number> = {
+    day: 0.22,
+    conductor: 0.28,
+    rail: 0.4,
+    fish: 0.34,
+    brainstorming: 0.34,
+    building: 0.34,
+    researching: 0.34,
+    reviewing: 0.34,
+};
 
 /** The most a drifting creature rises above its ledge floor. */
 const DRIFT_RISE = 0.12;

@@ -22,11 +22,24 @@ export function sessionName(title: string): string {
     return title.replace(STATUS_PREFIX, '');
 }
 
+/** Whole hyphen-separated words that name a kind of work. `auditing` is a kind of reviewing. */
+const WORK: Record<string, SessionRole> = {
+    brainstorming: 'brainstorming',
+    building: 'building',
+    researching: 'researching',
+    reviewing: 'reviewing',
+    auditing: 'reviewing',
+};
+
 export function roleForName(name: string): SessionRole {
     if (DAY.test(name)) return 'day';
     // Rails first, so a batch slug containing "conduct" still makes a rail.
     if (RAIL.test(name)) return 'rail';
-    if (name.toLowerCase().includes('conduct')) return 'conductor';
+    const lower = name.toLowerCase();
+    if (lower.includes('conduct')) return 'conductor';
+    for (const word of lower.split('-')) {
+        if (Object.hasOwn(WORK, word)) return WORK[word]!;
+    }
     return 'fish';
 }
 

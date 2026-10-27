@@ -127,6 +127,59 @@ describe('roles from session names', () => {
         expect(roleForName('wed-14-10-2026')).toBe('day');
     });
 
+    it('a work word in the name picks the work kind', () => {
+        const names = [
+            'brainstorming-lantern',
+            'Brainstorming-Lantern',
+            'building-lantern-6a',
+            'lantern-building-tools',
+            'researching-pebble-api',
+            'reviewing-driftwood-pr',
+            'auditing-pebble-sync',
+        ];
+        expect(Object.fromEntries(names.map((n) => [n, roleForName(n)]))).toEqual({
+            'brainstorming-lantern': 'brainstorming',
+            'Brainstorming-Lantern': 'brainstorming',
+            'building-lantern-6a': 'building',
+            'lantern-building-tools': 'building',
+            'researching-pebble-api': 'researching',
+            'reviewing-driftwood-pr': 'reviewing',
+            'auditing-pebble-sync': 'reviewing',
+        });
+    });
+
+    it('only a whole work word counts', () => {
+        const names = [
+            'rebuilding-notes',
+            'buildings-map',
+            'brainstorm-ideas',
+            'kelp-review',
+            'research',
+        ];
+        expect(Object.fromEntries(names.map((n) => [n, roleForName(n)]))).toEqual({
+            'rebuilding-notes': 'fish',
+            'buildings-map': 'fish',
+            'brainstorm-ideas': 'fish',
+            'kelp-review': 'fish',
+            research: 'fish',
+        });
+    });
+
+    it('day, rail and conductor names win over a work word', () => {
+        const names = [
+            'building-tools-rail-a',
+            'reviewing-batch-rail-b2',
+            'conducting-building-lantern',
+            'researching-conductor-notes',
+        ];
+        expect(Object.fromEntries(names.map((n) => [n, roleForName(n)]))).toEqual({
+            'building-tools-rail-a': 'rail',
+            'reviewing-batch-rail-b2': 'rail',
+            'conducting-building-lantern': 'conductor',
+            'researching-conductor-notes': 'conductor',
+        });
+    });
+
     it("sessionName strips Kelpi's status prefix", () => {
         expect(sessionName('✳ wed-14-10-2026')).toBe('wed-14-10-2026');
         expect(sessionName('◐ rail-a')).toBe('rail-a');

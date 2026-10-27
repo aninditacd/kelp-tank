@@ -201,7 +201,16 @@ describe('where creatures head', () => {
     });
 
     it('an idle creature drifts slower than any working one', () => {
-        const roles: SessionRole[] = ['day', 'conductor', 'rail', 'fish'];
+        const roles: SessionRole[] = [
+            'day',
+            'conductor',
+            'rail',
+            'fish',
+            'brainstorming',
+            'building',
+            'researching',
+            'reviewing',
+        ];
         for (const role of roles) {
             expect(speedFor(role, { kind: 'drift' })).toBeGreaterThan(0);
             expect(speedFor(role, { kind: 'drift' })).toBeLessThan(
