@@ -13,7 +13,16 @@ import type {
 // These are type assertions: `pnpm typecheck` fails when the shape drifts.
 describe('TankState', () => {
     it('the tank state carries the agreed workspace and session fields', () => {
-        expectTypeOf<SessionRole>().toEqualTypeOf<'day' | 'conductor' | 'rail' | 'fish'>();
+        expectTypeOf<SessionRole>().toEqualTypeOf<
+            | 'day'
+            | 'conductor'
+            | 'rail'
+            | 'fish'
+            | 'brainstorming'
+            | 'building'
+            | 'researching'
+            | 'reviewing'
+        >();
         expectTypeOf<SessionState>().toEqualTypeOf<
             'working' | 'wantsYou' | 'update' | 'idle' | 'closed'
         >();

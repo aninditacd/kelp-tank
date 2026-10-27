@@ -29,8 +29,19 @@ export interface TankWorkspace {
     shortcut: string | null;
 }
 
-/** Which creature a session becomes, decided from its name. */
-export type SessionRole = 'day' | 'conductor' | 'rail' | 'fish';
+/**
+ * Which creature a session becomes, decided from its name. The last four are the kinds of work
+ * from Dita's session naming rule: a fish with a wizard cap, a hard hat, a lantern or glasses.
+ */
+export type SessionRole =
+    | 'day'
+    | 'conductor'
+    | 'rail'
+    | 'fish'
+    | 'brainstorming'
+    | 'building'
+    | 'researching'
+    | 'reviewing';
 
 /**
  * Kelpi's `running` is `working`, `waitingForInput` is `wantsYou`, and `idle` is `idle`.

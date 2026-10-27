@@ -28,7 +28,13 @@ It is a hobby build, with no deadline and no Linear tickets.
 | Daily session | A day name such as `wed-14-10-2026` | Turtle |
 | Conductor | A name containing `conduct` | Round pufferfish with a tiny crown |
 | A conductor's rail | A name ending in `rail-a`, `rail-b` and so on, with or without a batch prefix such as `lh-deps-1013-`. A handover number such as `rail-r2` still counts | Very small fish that follow their conductor |
+| Brainstorming | The whole word `brainstorming`, such as `brainstorming-lantern` | Round fish in a starry wizard cap |
+| Building | The whole word `building` | Round fish in a yellow hard hat |
+| Researching | The whole word `researching` | Anglerfish with a glowing lantern |
+| Reviewing | The whole word `reviewing` or `auditing` | Boxfish in round glasses |
 | Anything else | Any other name | Chubby round fish |
+
+A day, rail or conductor name wins over a work word, so `conducting-building-lantern` is still a conductor. Dita added the four work kinds on 27 Oct 2026, with a session naming rule that leads each name with its work word.
 
 All creatures are cute, with big eyes and pink cheeks. A busy ledge is shared, not capped.
 
