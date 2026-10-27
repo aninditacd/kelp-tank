@@ -288,6 +288,23 @@ function onBody(d: Vector3, k = 1) {
     return { point, normal };
 }
 
+// Shared like the other creatures' materials and shapes, so building a creature allocates no new
+// GPU resources and leaving one frees nothing.
+const NAVY = twoSided('#34407a');
+const HAT_YELLOW = twoSided('#ffc93c');
+const GOLD = new MeshBasicMaterial({ color: 0xffe27a });
+const MOUTH = new MeshBasicMaterial({ color: 0x2a1530 });
+const BULB = new MeshBasicMaterial({ color: 0xfff1a0 });
+const HALO = new MeshBasicMaterial({
+    color: 0xffe066,
+    transparent: true,
+    opacity: 0.28,
+    depthWrite: false,
+});
+const DOME = new SphereGeometry(1, 28, 12, 0, Math.PI * 2, 0, Math.PI / 2);
+const BOX = new BoxGeometry(1.35, 1.05, 0.95);
+const RING = new TorusGeometry(0.33, 0.04, 8, 28);
+
 function twoSided(hex: string): MeshToonMaterial {
     const material = toon(hex).clone();
     material.side = DoubleSide;
@@ -295,19 +312,9 @@ function twoSided(hex: string): MeshToonMaterial {
 }
 
 /** A half dome on the head, `w` wide and `h` tall, its rim sunk `sink` under the skin. */
-function dome(
-    material: MeshToonMaterial,
-    w: number,
-    h: number,
-    sink: number,
-    phiStart = 0,
-    phiLength = Math.PI * 2,
-) {
+function dome(material: MeshToonMaterial, w: number, h: number, sink: number) {
     const { point, normal } = onBody(HEAD);
-    const mesh = new Mesh(
-        new SphereGeometry(1, 28, 12, phiStart, phiLength, 0, Math.PI / 2),
-        material,
-    );
+    const mesh = new Mesh(DOME, material);
     mesh.scale.set(w, h, w);
     mesh.position.copy(point).addScaledVector(normal, -sink);
     mesh.quaternion.copy(new Quaternion().setFromUnitVectors(UP, normal));
@@ -316,8 +323,8 @@ function dome(
 
 function buildWizard(color: string) {
     const parts = buildFish(color);
-    const navy = twoSided('#34407a');
-    const gold = new MeshBasicMaterial({ color: 0xffe27a });
+    const navy = NAVY;
+    const gold = GOLD;
     parts.group.add(dome(navy, 0.46, 0.2, 0.08));
     const { point, normal } = onBody(HEAD, 1.08);
     const hat = new Group();
@@ -342,7 +349,7 @@ function buildWizard(color: string) {
 
 function buildHardHat(color: string) {
     const parts = buildFish(color);
-    const yellow = twoSided('#ffc93c');
+    const yellow = HAT_YELLOW;
     const angle = 0.5;
     parts.group.add(dome(yellow, 0.6, 0.46, 0.1));
     const top = onBody(HEAD, 1.33);
@@ -365,7 +372,7 @@ function buildHardHat(color: string) {
 function buildAngler(color: string) {
     const parts = buildFish(color);
     const g = parts.group;
-    g.add(at(blob(new MeshBasicMaterial({ color: 0x2a1530 }), 0.32, 0.18, 0.45), 1.0, -0.32, 0));
+    g.add(at(blob(MOUTH, 0.32, 0.18, 0.45), 1.0, -0.32, 0));
     for (let i = -2; i <= 2; i++) {
         const tooth = cone(CONE4, WHITE, 0.05, 0.12, 0.05, 1.12, -0.2, i * 0.13, Math.PI);
         g.add(tooth);
@@ -382,14 +389,8 @@ function buildAngler(color: string) {
     ] as const) {
         lure.add(at(blob(stalk, 0.06, 0.06, 0.06), x, y, 0));
     }
-    lure.add(at(blob(new MeshBasicMaterial({ color: 0xfff1a0 }), 0.15, 0.15, 0.15), 1.02, 0.1, 0));
-    const halo = new MeshBasicMaterial({
-        color: 0xffe066,
-        transparent: true,
-        opacity: 0.28,
-        depthWrite: false,
-    });
-    lure.add(at(blob(halo, 0.3, 0.3, 0.3), 1.02, 0.1, 0));
+    lure.add(at(blob(BULB, 0.15, 0.15, 0.15), 1.02, 0.1, 0));
+    lure.add(at(blob(HALO, 0.3, 0.3, 0.3), 1.02, 0.1, 0));
     g.add(lure);
     return { ...parts, top: 1.35 };
 }
@@ -399,7 +400,7 @@ function buildSpectacled(color: string) {
     const lids: Mesh[] = [];
     const body = toon(color);
     const fin = toon(mix(color, '#ffffff', 0.25));
-    g.add(new Mesh(new BoxGeometry(1.35, 1.05, 0.95), body));
+    g.add(new Mesh(BOX, body));
     g.add(at(blob(body, 0.95, 0.72, 0.66), 0.05, 0, 0));
     g.add(at(blob(toon(mix(color, '#ffffff', 0.55)), 0.8, 0.35, 0.6), 0.1, -0.45, 0));
     const tail = new Group();
@@ -416,7 +417,7 @@ function buildSpectacled(color: string) {
     }
     eyes(g, 0.86, 0.25, 0.33, 0.3, color, lids, 1.2);
     for (const s of [1, -1]) {
-        const ring = new Mesh(new TorusGeometry(0.33, 0.04, 8, 28), BLACK);
+        const ring = new Mesh(RING, BLACK);
         ring.position.set(1.0, 0.25, 0.33 * s);
         ring.rotation.y = Math.PI / 2 - 0.35 * s;
         g.add(ring);
