@@ -4,6 +4,7 @@ import { AGENT_TIMEOUT_MS, EMPTY_BOOK, type AgentBook } from '../src/agents';
 import { decideTank } from '../src/decide-tank';
 import type { ChromeSnapshot, PluginEvent, Snapshot } from '../src/kelpi-api';
 import { worldFromSnapshot } from '../src/kelpi-world';
+import { DEFAULT_PATTERNS, matchersFor, type RoleMatchers } from '../src/role-patterns';
 import { startLiveTank } from '../src/live-tank';
 import type { TankState } from '../src/tank-state';
 import {
@@ -33,6 +34,7 @@ function fakeKelpi(
         holdBook?: boolean;
         activity?: unknown;
         holdActivity?: boolean;
+        roles?: RoleMatchers;
     } = {},
 ) {
     const listeners: ((event: PluginEvent) => void)[] = [];
@@ -95,6 +97,7 @@ function fakeKelpi(
         kelpi,
         (state) => states.push(state),
         (error) => errors.push(error),
+        options.roles,
     );
     return {
         kelpi,
@@ -145,6 +148,33 @@ describe('the live tank', () => {
         await fake.resolveSnapshot(recordedSnapshot);
         eventsBetween(173, 253).forEach(fake.deliver);
         expect(fake.states.at(-1)).toEqual(replayTank(253));
+    });
+
+    it('the name patterns given at start pick the roles (issue #3)', async () => {
+        const fake = fakeKelpi({ roles: matchersFor({ ...DEFAULT_PATTERNS, rail: '' }) });
+        await fake.resolveSnapshot(recordedSnapshot);
+        eventsBetween(173, 253).forEach(fake.deliver);
+        expect(sessionOf(fake.states.at(-1), 'rail-a')?.role).toBe('fish');
+    });
+
+    it('new name patterns re-decide the tank at once (issue #3)', async () => {
+        const fake = fakeKelpi();
+        await fake.resolveSnapshot(recordedSnapshot);
+        eventsBetween(173, 253).forEach(fake.deliver);
+        expect(sessionOf(fake.states.at(-1), 'rail-a')?.role).toBe('rail');
+        const before = fake.states.length;
+        fake.live.setRoles(matchersFor({ ...DEFAULT_PATTERNS, rail: '' }));
+        expect(fake.states).toHaveLength(before + 1);
+        expect(sessionOf(fake.states.at(-1), 'rail-a')?.role).toBe('fish');
+    });
+
+    it('new name patterns before the first snapshot wait for it (issue #3)', async () => {
+        const fake = fakeKelpi();
+        fake.live.setRoles(matchersFor({ ...DEFAULT_PATTERNS, rail: '' }));
+        expect(fake.states).toHaveLength(0);
+        await fake.resolveSnapshot(recordedSnapshot);
+        eventsBetween(173, 253).forEach(fake.deliver);
+        expect(sessionOf(fake.states.at(-1), 'rail-a')?.role).toBe('fish');
     });
 
     it('the tank never polls Kelpi', async () => {

@@ -81,6 +81,7 @@ All creatures are cute, with big eyes and pink cheeks. A busy ledge is shared, n
 - A pinch or Cmd-scroll zooms in and out around the pointer, up to three times closer. The +, - and fit buttons in the bottom corner do the same, and fit returns to the tank's full width, scrolled to the top. A plain scroll moves through a tall tank and never zooms.
 - The menu button in the top corner lists every workspace with a live session, each with a show/hide toggle. A hidden workspace's ledge and fish leave the tank, and stay hidden after a restart.
 - When a session in a hidden workspace wants Dita, the menu button shows a glowing dot. A relaying rail or a muted workspace never lights it, as they never glow.
+- The menu's **Session names** section holds the patterns for the daily turtle, the conductor and the rail (issue #3). Each is a regular expression matched without regard to case, and an empty one turns that role off. The defaults are the rules in the table above. Save refuses an invalid pattern and names it. It also refuses a pattern whose repeated group repeats inside, as in `(a+)+`, because that shape can freeze the tank; this catches the common shape, not every slow pattern. Only a name's first 200 characters are matched. The patterns live in Kelpi plugin storage (`rolePatterns`), so they survive a restart. Dita chose name patterns only on 4 Nov 2026: not which creature each role gets, and not motion settings. Kelpi has no per-plugin settings page, so the controls sit in the tank's menu.
 
 ## Not in version one
 
