@@ -17,6 +17,8 @@ export interface WorkspaceMenu {
     render(entries: MenuEntry[], dot: boolean): void;
     /** Fills the session-name fields, and shows `note` under them (empty for none). */
     showNames(patterns: RolePatterns, note: string): void;
+    /** Shows `note` under the session-name fields, leaving what is typed in them alone. */
+    showNote(note: string): void;
     dispose(): void;
 }
 
@@ -84,6 +86,9 @@ export function createWorkspaceMenu(
     reset.type = 'button';
     reset.textContent = 'Reset to defaults';
     reset.addEventListener('click', () => options.onResetNames());
+    // Off until the saved patterns arrive, so Save can never store the empty fields.
+    save.disabled = true;
+    reset.disabled = true;
     const actions = document.createElement('div');
     actions.className = 'ws-names-actions';
     actions.append(save, reset);
@@ -142,6 +147,11 @@ export function createWorkspaceMenu(
         },
         showNames(patterns, text) {
             for (const { role } of NAME_FIELDS) inputs[role].value = patterns[role];
+            save.disabled = false;
+            reset.disabled = false;
+            note.textContent = text;
+        },
+        showNote(text) {
             note.textContent = text;
         },
         dispose() {

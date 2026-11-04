@@ -6,6 +6,8 @@ import {
     matchersFor,
     PATTERNS_KEY,
     problemNote,
+    saveFailedNote,
+    saveNote,
     readPatterns,
 } from '../src/role-patterns';
 
@@ -15,7 +17,7 @@ const rolesOf = (names: string[], patterns = DEFAULT_PATTERNS) => {
 };
 
 describe('role patterns (issue #3)', () => {
-    it('saves under rolePatterns in plugin storage', () => {
+    it('names the plugin storage key rolePatterns', () => {
         expect(PATTERNS_KEY).toBe('rolePatterns');
     });
 
@@ -116,6 +118,51 @@ describe('role patterns (issue #3)', () => {
         expect(problemNote({})).toBe('');
         expect(problemNote({ rail: 'bad rail', day: 'bad day' })).toBe(
             'Daily session: bad day\nRail: bad rail',
+        );
+    });
+
+    it('checkPatterns refuses a pattern with a repeated group that repeats inside', () => {
+        // These shapes take exponential time on a long non-matching name and would freeze the tank.
+        const slow = ['(a+)+$', '(\\w*)*x', '(?:x-\\d+)+$', '([a-z]{1,3})*!'];
+        for (const rail of slow) {
+            expect(checkPatterns({ ...DEFAULT_PATTERNS, rail })).toEqual({
+                rail: expect.stringContaining('too slow'),
+            });
+        }
+    });
+
+    it('a repeated group without a repeat inside, or a group that is only optional, is fine', () => {
+        const fine = ['(ab)+$', '(?:-\\d+)?$', '(?:^|-)rail-', '\\(x+\\)+'];
+        for (const rail of fine) {
+            expect(checkPatterns({ ...DEFAULT_PATTERNS, rail })).toEqual({});
+        }
+    });
+
+    it('a slow pattern in storage falls back to the default for that role', () => {
+        expect(
+            rolesOf(['lantern-rail-a', 'aaaa'], { ...DEFAULT_PATTERNS, rail: '(a+)+$' }),
+        ).toEqual({ 'lantern-rail-a': 'rail', aaaa: 'fish' });
+    });
+
+    it('only the first 200 characters of a name are matched', () => {
+        const long = 'x'.repeat(200) + '-rail-a';
+        expect(rolesOf([long, 'x'.repeat(190) + '-rail-a'])).toEqual({
+            [long]: 'fish',
+            ['x'.repeat(190) + '-rail-a']: 'rail',
+        });
+    });
+
+    it('saveNote says what Save does with each set of patterns', () => {
+        expect(saveNote(DEFAULT_PATTERNS)).toEqual({ save: true, note: 'Saved.' });
+        expect(saveNote({ ...DEFAULT_PATTERNS, rail: '(' })).toEqual({
+            save: false,
+            note: expect.stringMatching(/^Not saved\.\nRail: /),
+        });
+    });
+
+    it('saveFailedNote says the patterns apply until the tank reloads', () => {
+        expect(saveFailedNote('disk full')).toBe(
+            'Not saved: disk full. The tank uses them until it reloads.',
         );
     });
 });

@@ -1,7 +1,7 @@
 import { activityForTool } from './activity';
 import { liveAgents, type AgentBook } from './agents';
 import { sidebarOrder, type KelpiWorld, type WorldPane } from './kelpi-world';
-import { DEFAULT_MATCHERS, type RoleMatchers } from './role-patterns';
+import { DEFAULT_MATCHERS, MAX_NAME_LENGTH, type RoleMatchers } from './role-patterns';
 import { FALLBACK_CHORDS, workspaceShortcuts } from './shortcuts';
 import type { SessionRole, SessionState, TankSession, TankState } from './tank-state';
 
@@ -27,10 +27,12 @@ const WORK: Record<string, SessionRole> = {
 
 /** The role a session name gives, from the name patterns (src/role-patterns.ts), then work words. */
 export function roleForName(name: string, roles: RoleMatchers = DEFAULT_MATCHERS): SessionRole {
-    if (roles.day?.test(name)) return 'day';
+    // A bound on the text bounds the time any pattern can take on it.
+    const head = name.slice(0, MAX_NAME_LENGTH);
+    if (roles.day?.test(head)) return 'day';
     // Rails first, so a batch slug containing "conduct" still makes a rail.
-    if (roles.rail?.test(name)) return 'rail';
-    if (roles.conductor?.test(name)) return 'conductor';
+    if (roles.rail?.test(head)) return 'rail';
+    if (roles.conductor?.test(head)) return 'conductor';
     const lower = name.toLowerCase();
     for (const word of lower.split('-')) {
         if (Object.hasOwn(WORK, word)) return WORK[word]!;

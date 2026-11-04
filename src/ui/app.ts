@@ -10,6 +10,8 @@ import {
     problemNote,
     readPatterns,
     type RolePatterns,
+    saveFailedNote,
+    saveNote,
 } from '../role-patterns';
 import type { TankState } from '../tank-state';
 import {
@@ -47,24 +49,21 @@ try {
         tank.setState(visibleState(latest, hidden));
         menu.render(menuEntries(latest, hidden), hiddenWantsYou(latest, hidden));
     };
-    // The session-name patterns take effect at once; saving keeps them for the next page.
+    // The session-name patterns take effect at once; saving keeps them for the next page. The
+    // save's answer only changes the note, so it never undoes typing done while it was pending.
     const useNames = (next: RolePatterns, done: string) => {
         live?.setRoles(matchersFor(next));
         menu.showNames(next, 'Saving…');
         api.storage.set(PATTERNS_KEY, next).then(
-            () => menu.showNames(next, done),
-            (failure: Error) =>
-                menu.showNames(
-                    next,
-                    `Not saved: ${failure.message}. The tank uses them until it reloads.`,
-                ),
+            () => menu.showNote(done),
+            (failure: Error) => menu.showNote(saveFailedNote(failure.message)),
         );
     };
     const menu = createWorkspaceMenu(document.querySelector<HTMLElement>('#tank-box')!, {
         onSaveNames(next) {
-            const problems = problemNote(checkPatterns(next));
-            if (problems) menu.showNames(next, `Not saved.\n${problems}`);
-            else useNames(next, 'Saved.');
+            const { save, note } = saveNote(next);
+            if (save) useNames(next, note);
+            else menu.showNote(note);
         },
         onResetNames() {
             useNames(DEFAULT_PATTERNS, 'Back to the defaults.');

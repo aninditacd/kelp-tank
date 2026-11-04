@@ -30,14 +30,52 @@ export const DEFAULT_PATTERNS: RolePatterns = {
     rail: '(?:^|-)rail-[a-z]\\d*(?:-\\d+)?$',
 };
 
-/** Compiles one pattern: null for an empty one, an Error for an invalid one. */
+/** Names longer than this are matched on their first `MAX_NAME_LENGTH` characters only. */
+export const MAX_NAME_LENGTH = 200;
+
+/**
+ * True when a group that repeats (`+`, `*` or `{`) holds a repeat itself, as in `(a+)+`. That
+ * shape can take exponential time on a name that almost matches, and the tank tests every name
+ * on every change, so one such pattern would freeze it on every load. This catches the common
+ * shape, not every slow pattern.
+ */
+function repeatsARepeat(source: string): boolean {
+    const groups: boolean[] = []; // per open group: does it hold a repeat?
+    for (let i = 0; i < source.length; i++) {
+        const char = source[i];
+        if (char === '\\') {
+            i++;
+        } else if (char === '[') {
+            // Skip a character class, escapes included.
+            for (i++; i < source.length && source[i] !== ']'; i++) if (source[i] === '\\') i++;
+        } else if (char === '(') {
+            groups.push(false);
+        } else if (char === ')') {
+            const heldRepeat = groups.pop() ?? false;
+            const next = source[i + 1];
+            const repeats = next === '+' || next === '*' || next === '{';
+            if (repeats && heldRepeat) return true;
+            if (groups.length > 0 && (heldRepeat || repeats)) groups[groups.length - 1] = true;
+        } else if ((char === '+' || char === '*' || char === '{') && groups.length > 0) {
+            groups[groups.length - 1] = true;
+        }
+    }
+    return false;
+}
+
+/** Compiles one pattern: null for an empty one, an Error for an invalid or too slow one. */
 function compile(source: string): RegExp | null | Error {
     if (source.trim() === '') return null;
+    let compiled: RegExp;
     try {
-        return new RegExp(source, 'i');
+        compiled = new RegExp(source, 'i');
     } catch (failure) {
         return failure as Error;
     }
+    if (repeatsARepeat(source)) {
+        return new Error('too slow: a repeated group repeats inside, as in (a+)+');
+    }
+    return compiled;
 }
 
 /** Each invalid pattern's error message, keyed by role. Empty when every pattern is usable. */
@@ -85,4 +123,17 @@ export function problemNote(problems: Partial<Record<PatternRole, string>>): str
     return ROLES.filter((role) => problems[role] !== undefined)
         .map((role) => `${ROLE_NAMES[role]}: ${problems[role]}`)
         .join('\n');
+}
+
+/** What Save does with `patterns`: save them, or refuse and say which ones are wrong. */
+export function saveNote(patterns: RolePatterns): { save: boolean; note: string } {
+    const problems = problemNote(checkPatterns(patterns));
+    return problems
+        ? { save: false, note: `Not saved.\n${problems}` }
+        : { save: true, note: 'Saved.' };
+}
+
+/** The note when storage refuses a save: the patterns still apply on this page. */
+export function saveFailedNote(message: string): string {
+    return `Not saved: ${message}. The tank uses them until it reloads.`;
 }
