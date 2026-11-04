@@ -158,7 +158,9 @@
         border-top: 1px solid #cfe1e5;
         margin-top: 4px;
         padding: 4px 6px 2px;
-        width: 220px;
+        box-sizing: border-box;
+        /* Never wider than the view: a sidebar can be under 200 px wide. */
+        width: min(220px, calc(100vw - 24px));
     }
     .ws-names summary {
         cursor: pointer;
@@ -189,6 +191,7 @@
     }
     .ws-names-actions {
         display: flex;
+        flex-wrap: wrap;
         gap: 6px;
         margin-top: 8px;
     }
