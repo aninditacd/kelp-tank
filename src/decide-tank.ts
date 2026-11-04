@@ -12,10 +12,11 @@ import type { SessionRole, SessionState, TankSession, TankState } from './tank-s
 const STATUS_PREFIX = /^[^\p{L}\p{N}]\s+/u;
 const DAY = /^(mon|tue|wed|thu|fri|sat|sun)-\d{2}-\d{2}-\d{4}$/i;
 /**
- * A conductor's rail: `rail-a`, a batch-prefixed `lh-deps-1013-rail-a`, or a handover such as
- * `lh-deps-1013-rail-r2`. Never `guardrail-a`, `rail-ab` or `rail-2`.
+ * A conductor's rail: `rail-a`, a batch-prefixed `lh-deps-1013-rail-a`, a handover such as
+ * `lh-deps-1013-rail-r2`, or a relaunch with a numeric suffix such as `rail-c1-2` (issue #28).
+ * Never `guardrail-a`, `rail-ab` or `rail-2`.
  */
-const RAIL = /(?:^|-)rail-[a-z]\d*$/i;
+const RAIL = /(?:^|-)rail-[a-z]\d*(?:-\d+)?$/i;
 
 /** The session name from a pane title, without Kelpi's one-character status prefix. */
 export function sessionName(title: string): string {

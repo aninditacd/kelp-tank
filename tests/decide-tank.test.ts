@@ -88,6 +88,37 @@ describe('roles from session names', () => {
         );
     });
 
+    it('a rail relaunched with a numeric suffix is still a rail (issue #28)', () => {
+        // A conductor relaunches a rail with -<n> after its letter. Names in the shape a live batch produced.
+        const names = [
+            'lantern-v2-rail-a',
+            'qa-rail-b',
+            'pebble-deps-1013-rail-r2',
+            'lantern-v2-rail-a-2',
+            'lantern-v2-rail-c1-2',
+            'lantern-v2-rail-d1-4',
+            'lantern-v2-rail-e-2',
+            'rail-e-12',
+        ];
+        expect(Object.fromEntries(names.map((n) => [n, roleForName(n)]))).toEqual(
+            Object.fromEntries(names.map((n) => [n, 'rail'])),
+        );
+    });
+
+    it('a relaunch suffix does not make a non-rail a rail', () => {
+        const names = [
+            'guardrail-a-2',
+            'rail-ab-2',
+            'rail-2-2',
+            'rail-a-notes-2',
+            'rail-a-2b',
+            'rail-a-',
+        ];
+        expect(Object.fromEntries(names.map((n) => [n, roleForName(n)]))).toEqual(
+            Object.fromEntries(names.map((n) => [n, 'fish'])),
+        );
+    });
+
     it('a trailing number does not make a non-rail a rail', () => {
         const names = [
             'guardrail-a2',
