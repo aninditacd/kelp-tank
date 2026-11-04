@@ -2,6 +2,15 @@
 // running the built plugin in Kelpi's private instance. The logic it wires is tested in tests/.
 import type { ViewApi } from '../kelpi-api';
 import { startLiveTank } from '../live-tank';
+import {
+    checkPatterns,
+    DEFAULT_PATTERNS,
+    matchersFor,
+    PATTERNS_KEY,
+    problemNote,
+    readPatterns,
+    type RolePatterns,
+} from '../role-patterns';
 import type { TankState } from '../tank-state';
 import {
     type HiddenStore,
@@ -38,7 +47,28 @@ try {
         tank.setState(visibleState(latest, hidden));
         menu.render(menuEntries(latest, hidden), hiddenWantsYou(latest, hidden));
     };
+    // The session-name patterns take effect at once; saving keeps them for the next page.
+    const useNames = (next: RolePatterns, done: string) => {
+        live?.setRoles(matchersFor(next));
+        menu.showNames(next, 'Saving…');
+        api.storage.set(PATTERNS_KEY, next).then(
+            () => menu.showNames(next, done),
+            (failure: Error) =>
+                menu.showNames(
+                    next,
+                    `Not saved: ${failure.message}. The tank uses them until it reloads.`,
+                ),
+        );
+    };
     const menu = createWorkspaceMenu(document.querySelector<HTMLElement>('#tank-box')!, {
+        onSaveNames(next) {
+            const problems = problemNote(checkPatterns(next));
+            if (problems) menu.showNames(next, `Not saved.\n${problems}`);
+            else useNames(next, 'Saved.');
+        },
+        onResetNames() {
+            useNames(DEFAULT_PATTERNS, 'Back to the defaults.');
+        },
         onToggle(workspaceId) {
             if (!store) return;
             const saving = store.toggle(workspaceId);
@@ -66,6 +96,11 @@ try {
                 // shown every second would be worse.
                 api.storage.set(MEMORY_KEY, JSON.parse(next)).catch(() => {});
             }, 1000);
+            // A failed read or a missing key gives the built-in patterns. An invalid saved one is
+            // named here, and its role uses the default meanwhile.
+            const names = readPatterns(await api.storage.get(PATTERNS_KEY).catch(() => null));
+            const stored = problemNote(checkPatterns(names));
+            menu.showNames(names, stored && `Using the default for:\n${stored}`);
             live = startLiveTank(
                 api,
                 (state) => {
@@ -75,6 +110,7 @@ try {
                     show();
                 },
                 showError,
+                matchersFor(names),
             );
         })
         .catch(showError);

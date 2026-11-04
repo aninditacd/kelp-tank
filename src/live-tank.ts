@@ -4,6 +4,7 @@ import { decideTank } from './decide-tank';
 import type { AgentHookEvent, PluginEvent, Snapshot, ViewApi } from './kelpi-api';
 import { applyChanges, worldFromSnapshot, type KelpiWorld } from './kelpi-world';
 import { quietAfter } from './quiet';
+import { DEFAULT_MATCHERS, type RoleMatchers } from './role-patterns';
 import { chordsFromKeymap, FALLBACK_CHORDS } from './shortcuts';
 import type { TankState } from './tank-state';
 
@@ -44,12 +45,16 @@ const BABY_CHECK_MS = 30 * 1000;
  * doing and whether it dozes (src/activity.ts). The backend keeps the same record, so a snapshot
  * seeds the world from its answer. The answer names the last event it covers; a buffered event at
  * or before that, in the same epoch, is already in it and does not change the activity again.
+ *
+ * `roles` are the name patterns people set in the corner menu (src/role-patterns.ts). `setRoles`
+ * swaps them and re-decides at once; before the first snapshot it only keeps them for it.
  */
 export function startLiveTank(
     kelpi: LiveKelpi,
     onState: (state: TankState) => void,
     onError: (error: Error) => void,
-): { jump(paneId: string): Promise<void>; stop(): void } {
+    roles: RoleMatchers = DEFAULT_MATCHERS,
+): { jump(paneId: string): Promise<void>; setRoles(next: RoleMatchers): void; stop(): void } {
     let epoch: string | null = null;
     let sequence = -1;
     let world: KelpiWorld = {
@@ -71,7 +76,7 @@ export function startLiveTank(
     let stopped = false;
 
     const decide = (previous: TankState | null) =>
-        decideTank(world, previous, chords, quiet, { book, now: Date.now() });
+        decideTank(world, previous, chords, quiet, { book, now: Date.now() }, roles);
 
     /** Takes `next` if it is newer, and re-decides then, or every `BABY_CHECK_MS` while any agent is left. */
     function takeBook(next: AgentBook) {
@@ -223,6 +228,12 @@ export function startLiveTank(
         async jump(paneId) {
             const session = tank.sessions.find((candidate) => candidate.paneId === paneId);
             if (session) await kelpi.ui.focusPane(session.workspaceId, paneId);
+        },
+        setRoles(next) {
+            roles = next;
+            if (epoch === null) return;
+            tank = decide(tank);
+            onState(tank);
         },
         stop() {
             stopped = true;

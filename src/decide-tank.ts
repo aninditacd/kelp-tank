@@ -1,6 +1,7 @@
 import { activityForTool } from './activity';
 import { liveAgents, type AgentBook } from './agents';
 import { sidebarOrder, type KelpiWorld, type WorldPane } from './kelpi-world';
+import { DEFAULT_MATCHERS, type RoleMatchers } from './role-patterns';
 import { FALLBACK_CHORDS, workspaceShortcuts } from './shortcuts';
 import type { SessionRole, SessionState, TankSession, TankState } from './tank-state';
 
@@ -10,14 +11,6 @@ import type { SessionRole, SessionState, TankSession, TankState } from './tank-s
  */
 
 const STATUS_PREFIX = /^[^\p{L}\p{N}]\s+/u;
-const DAY = /^(mon|tue|wed|thu|fri|sat|sun)-\d{2}-\d{2}-\d{4}$/i;
-/**
- * A conductor's rail: `rail-a`, a batch-prefixed `lh-deps-1013-rail-a`, a handover such as
- * `lh-deps-1013-rail-r2`, or a relaunch with a numeric suffix such as `rail-c1-2` (issue #28).
- * Never `guardrail-a`, `rail-ab` or `rail-2`.
- */
-const RAIL = /(?:^|-)rail-[a-z]\d*(?:-\d+)?$/i;
-
 /** The session name from a pane title, without Kelpi's one-character status prefix. */
 export function sessionName(title: string): string {
     return title.replace(STATUS_PREFIX, '');
@@ -32,12 +25,13 @@ const WORK: Record<string, SessionRole> = {
     auditing: 'reviewing',
 };
 
-export function roleForName(name: string): SessionRole {
-    if (DAY.test(name)) return 'day';
+/** The role a session name gives, from the name patterns (src/role-patterns.ts), then work words. */
+export function roleForName(name: string, roles: RoleMatchers = DEFAULT_MATCHERS): SessionRole {
+    if (roles.day?.test(name)) return 'day';
     // Rails first, so a batch slug containing "conduct" still makes a rail.
-    if (RAIL.test(name)) return 'rail';
+    if (roles.rail?.test(name)) return 'rail';
+    if (roles.conductor?.test(name)) return 'conductor';
     const lower = name.toLowerCase();
-    if (lower.includes('conduct')) return 'conductor';
     for (const word of lower.split('-')) {
         if (Object.hasOwn(WORK, word)) return WORK[word]!;
     }
@@ -65,7 +59,8 @@ function displayNameOf(pane: WorldPane): string {
  * baby fish are its pane's live agents of its own session id. Null, as without the hook, gives none.
  * `world.activity` gives a working session its `activity` and a waiting one its `dozing`
  * (src/activity.ts); a rail shows its activity but never dozes. Each baby fish shows its own
- * agent's newest tool, whatever its parent is doing. A waiting conductor does not doze while a rail in
+ * agent's newest tool, whatever its parent is doing. `roles` are the name patterns people set
+ * (src/role-patterns.ts); without them the built-in rules apply. A waiting conductor does not doze while a rail in
  * its workspace is working, so a sleeping conductor means no rail beside it is working.
  */
 export function decideTank(
@@ -74,12 +69,13 @@ export function decideTank(
     chords: readonly (string | null)[] = FALLBACK_CHORDS,
     quiet: ReadonlySet<string> = new Set(),
     babies: { book: AgentBook; now: number } | null = null,
+    roles: RoleMatchers = DEFAULT_MATCHERS,
 ): TankState {
     const live: TankSession[] = world.panes
         .filter((pane) => pane.agentKind !== null)
         .map((pane) => {
             const displayName = displayNameOf(pane);
-            const role = roleForName(displayName);
+            const role = roleForName(displayName, roles);
             const state = stateOf(pane);
             const shown =
                 state === 'wantsYou' && role !== 'rail' && quiet.has(pane.id) ? 'update' : state;

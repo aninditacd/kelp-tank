@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest';
 import { EMPTY_BOOK, type AgentBook } from '../src/agents';
 import { decideTank, roleForName, sessionName } from '../src/decide-tank';
 import { applyChanges, type KelpiWorld, type WorldPane } from '../src/kelpi-world';
+import { DEFAULT_PATTERNS, matchersFor } from '../src/role-patterns';
 import { FALLBACK_CHORDS } from '../src/shortcuts';
 import type { TankSession, TankState } from '../src/tank-state';
 import {
@@ -208,6 +209,27 @@ describe('roles from session names', () => {
             'reviewing-batch-rail-b2': 'rail',
             'conducting-building-lantern': 'conductor',
             'researching-conductor-notes': 'conductor',
+        });
+    });
+
+    it('decideTank uses the name patterns people set (issue #3)', () => {
+        const world = handBuilt([
+            livePane('lead', 'A', 'lead-pebble', { status: 'running' }),
+            livePane('w3', 'A', 'pebble-worker-3'),
+            livePane('old', 'A', 'pebble-rail-a'),
+        ]);
+        const roles = matchersFor({
+            ...DEFAULT_PATTERNS,
+            conductor: '^lead-',
+            rail: '-worker-\\d+$',
+        });
+        const tank = decideTank(world, null, FALLBACK_CHORDS, new Set(), null, roles);
+        expect(
+            Object.fromEntries(tank.sessions.map((s) => [s.paneId, [s.role, s.relaysTo]])),
+        ).toEqual({
+            lead: ['conductor', null],
+            w3: ['rail', 'lead'],
+            old: ['fish', null],
         });
     });
 
