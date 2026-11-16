@@ -452,7 +452,7 @@ function buildClownfish(color: string) {
     return { ...parts, top: 1.5 };
 }
 
-/** The do session: a round goldfish with a big flowing double tail and a green tick above it. */
+/** The do session: a round goldfish with a big flowing double tail and a green tick on each side. */
 function buildFantail(color: string) {
     const g = new Group();
     const lids: Mesh[] = [];
@@ -481,15 +481,18 @@ function buildFantail(color: string) {
     eyes(g, 0.64, 0.2, 0.46, 0.28, color, lids);
     for (const s of [1, -1]) g.add(at(blob(PINK, 0.15, 0.08, 0.03), 0.55, -0.12, 0.66 * s));
     g.add(at(blob(BLACK, 0.05, 0.035, 0.12), 1.04, -0.1, 0));
-    // The tick: a short arm up to the left and a long arm up to the right, from one corner.
-    const short = at(new Mesh(TICK, TICK_GREEN), -0.02, 1.42, 0);
-    short.scale.set(0.13, 0.34, 0.08);
-    short.rotation.z = 0.785;
-    const long = at(new Mesh(TICK, TICK_GREEN), 0.27, 1.55, 0);
-    long.scale.set(0.13, 0.62, 0.08);
-    long.rotation.z = -0.6;
-    g.add(short, long);
-    return { group: g, tail, fins, lids, top: 1.9 };
+    // The tick sits on each flank like a badge, clear of the "!" bubble that floats above the head:
+    // a short arm up to the left and a long arm up to the right, from one corner.
+    for (const s of [1, -1]) {
+        const short = at(new Mesh(TICK, TICK_GREEN), -0.37, 0.12, 0.78 * s);
+        short.scale.set(0.11, 0.26, 0.04);
+        short.rotation.z = 0.785;
+        const long = at(new Mesh(TICK, TICK_GREEN), -0.15, 0.2, 0.78 * s);
+        long.scale.set(0.11, 0.48, 0.04);
+        long.rotation.z = -0.6;
+        g.add(short, long);
+    }
+    return { group: g, tail, fins, lids, top: 1.25 };
 }
 
 function buildFor(role: SessionRole, colorHex: string) {
