@@ -8,6 +8,8 @@ import type { MenuEntry } from './hidden';
 
 const NAME_FIELDS: readonly { role: PatternRole; label: string }[] = [
     { role: 'day', label: 'Daily session (turtle)' },
+    { role: 'comms', label: 'Comms session (clownfish)' },
+    { role: 'do', label: 'Do session (fantail)' },
     { role: 'conductor', label: 'Conductor (pufferfish)' },
     { role: 'rail', label: 'Rail (tiny fish)' },
 ];
@@ -78,6 +80,8 @@ export function createWorkspaceMenu(
     save.addEventListener('click', () =>
         options.onSaveNames({
             day: inputs.day.value,
+            comms: inputs.comms.value,
+            do: inputs.do.value,
             conductor: inputs.conductor.value,
             rail: inputs.rail.value,
         }),

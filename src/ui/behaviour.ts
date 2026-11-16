@@ -24,11 +24,13 @@ export type Goal =
     | { kind: 'leave' };
 
 /**
- * Swim speeds in world units a second, from Dita's approved preview. The four work-kind fish swim
- * like the plain fish.
+ * Swim speeds in world units a second, from Dita's approved preview. The four work-kind fish and
+ * the comms and do fish swim like the plain fish.
  */
 const SPEED: Record<SessionRole, number> = {
     day: 0.22,
+    comms: 0.34,
+    do: 0.34,
     conductor: 0.28,
     rail: 0.4,
     fish: 0.34,

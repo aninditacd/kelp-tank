@@ -46,16 +46,32 @@ describe('role patterns (issue #3)', () => {
     it('a custom pattern for each role picks that role', () => {
         const patterns = {
             day: '^daily-',
+            comms: '^inbox-',
+            do: '^tasks-',
             conductor: '^lead-',
             rail: '-worker-\\d+$',
         };
         expect(
-            rolesOf(['daily-notes', 'lead-pebble', 'pebble-worker-3', 'wed-14-10-2026'], patterns),
+            rolesOf(
+                [
+                    'daily-notes',
+                    'inbox-pebble',
+                    'tasks-pebble',
+                    'lead-pebble',
+                    'pebble-worker-3',
+                    'wed-14-10-2026',
+                    'comms-wed-14-10-2026',
+                ],
+                patterns,
+            ),
         ).toEqual({
             'daily-notes': 'day',
+            'inbox-pebble': 'comms',
+            'tasks-pebble': 'do',
             'lead-pebble': 'conductor',
             'pebble-worker-3': 'rail',
             'wed-14-10-2026': 'fish',
+            'comms-wed-14-10-2026': 'fish',
         });
     });
 
@@ -71,11 +87,22 @@ describe('role patterns (issue #3)', () => {
     });
 
     it('an empty pattern turns its role off', () => {
-        const patterns = { day: '', conductor: '', rail: '' };
+        const patterns = { day: '', comms: '', do: '', conductor: '', rail: '' };
         expect(
-            rolesOf(['wed-14-10-2026', 'conducting-lantern', 'lantern-rail-a'], patterns),
+            rolesOf(
+                [
+                    'wed-14-10-2026',
+                    'comms-wed-14-10-2026',
+                    'do-wed-14-10-2026',
+                    'conducting-lantern',
+                    'lantern-rail-a',
+                ],
+                patterns,
+            ),
         ).toEqual({
             'wed-14-10-2026': 'fish',
+            'comms-wed-14-10-2026': 'fish',
+            'do-wed-14-10-2026': 'fish',
             'conducting-lantern': 'fish',
             'lantern-rail-a': 'fish',
         });
@@ -88,7 +115,9 @@ describe('role patterns (issue #3)', () => {
     });
 
     it('checkPatterns names each pattern that is not a valid regular expression', () => {
-        expect(checkPatterns({ day: '(', conductor: 'ok', rail: '[a-' })).toEqual({
+        expect(
+            checkPatterns({ day: '(', comms: 'ok', do: 'ok', conductor: 'ok', rail: '[a-' }),
+        ).toEqual({
             day: expect.any(String),
             rail: expect.any(String),
         });
@@ -114,10 +143,19 @@ describe('role patterns (issue #3)', () => {
         expect(readPatterns({ conductor: '' })).toEqual({ ...DEFAULT_PATTERNS, conductor: '' });
     });
 
+    it('patterns saved before the comms and do roles existed get those two defaults', () => {
+        const saved = { day: DEFAULT_PATTERNS.day, conductor: 'conduct', rail: '-worker$' };
+        const patterns = readPatterns(saved);
+        expect(rolesOf(['comms-mon-16-11-2026', 'do-mon-16-11-2026'], patterns)).toEqual({
+            'comms-mon-16-11-2026': 'comms',
+            'do-mon-16-11-2026': 'do',
+        });
+    });
+
     it('problemNote names each invalid pattern by its role, one per line', () => {
         expect(problemNote({})).toBe('');
-        expect(problemNote({ rail: 'bad rail', day: 'bad day' })).toBe(
-            'Daily session: bad day\nRail: bad rail',
+        expect(problemNote({ rail: 'bad rail', do: 'bad do', day: 'bad day' })).toBe(
+            'Daily session: bad day\nDo session: bad do\nRail: bad rail',
         );
     });
 

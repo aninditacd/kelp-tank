@@ -29,6 +29,8 @@ const HEMI = new SphereGeometry(1, 20, 10, 0, Math.PI * 2, 0, Math.PI / 2);
 /** How big each creature is, and how far its nose reaches ahead of its centre (in its own units). */
 export const SIZE: Record<SessionRole, number> = {
     day: 0.16,
+    comms: 0.12,
+    do: 0.12,
     conductor: 0.17,
     rail: 0.055,
     fish: 0.12,
@@ -39,6 +41,8 @@ export const SIZE: Record<SessionRole, number> = {
 };
 export const NOSE: Record<SessionRole, number> = {
     day: 1.75,
+    comms: 1.45,
+    do: 1.0,
     conductor: 1.05,
     rail: 1.2,
     fish: 1.2,
@@ -429,10 +433,105 @@ function buildSpectacled(color: string) {
     return { group: g, tail, fins, lids, top: 0.75 };
 }
 
+/**
+ * The comms session's white fins and bands, and the do session's gold fins and blue bow. Dita
+ * picked these accents on 16 Nov 2026, so the three daily creatures differ at sidebar size even
+ * though they share their workspace's colour.
+ */
+const CLOWN_WHITE = toon('#ffffff');
+const FANTAIL_GOLD = toon('#ffc93c');
+const BOW_BLUE = toon('#6ec6ff');
+
+/**
+ * The comms session: a long, slim clownfish with three thick black-edged white bands, white fins
+ * and a speech bubble with three dots in front of its nose.
+ */
+function buildClownfish(color: string) {
+    const g = new Group();
+    const lids: Mesh[] = [];
+    g.add(blob(toon(color), 1.45, 0.75, 0.6));
+    // Each band is a white slice a touch wider than the body where it sits, over a wider, thinner
+    // black slice, so it shows as a white ring with black edges.
+    for (const x of [0.7, 0, -0.8]) {
+        const k = Math.sqrt(1 - (x / 1.45) ** 2);
+        g.add(at(blob(BLACK, 0.13, 0.765 * k, 0.615 * k), x, 0, 0));
+        g.add(at(blob(CLOWN_WHITE, 0.09, 0.79 * k, 0.635 * k), x, 0, 0));
+    }
+    const tail = new Group();
+    tail.position.x = -1.3;
+    tail.add(cone(CONE4, CLOWN_WHITE, 0.45, 0.7, 0.14, -0.3, 0, 0, -Math.PI / 2));
+    g.add(tail);
+    g.add(cone(CONE4, CLOWN_WHITE, 0.3, 0.45, 0.1, -0.35, 0.72, 0, 0.5));
+    const fins: Group[] = [];
+    for (const s of [1, -1]) {
+        const f = new Group();
+        f.position.set(0.45, -0.25, 0.5 * s);
+        f.add(at(blob(CLOWN_WHITE, 0.28, 0.09, 0.16), -0.13, 0, 0.07 * s));
+        g.add(f);
+        fins.push(f);
+    }
+    eyes(g, 1.02, 0.17, 0.33, 0.22, color, lids);
+    for (const s of [1, -1]) g.add(at(blob(PINK, 0.12, 0.06, 0.03), 0.98, -0.12, 0.45 * s));
+    g.add(at(blob(BLACK, 0.045, 0.03, 0.1), 1.44, -0.1, 0));
+    g.add(at(blob(WHITE, 0.34, 0.24, 0.1), 1.6, 0.72, 0));
+    g.add(cone(CONE4, WHITE, 0.09, 0.2, 0.06, 1.42, 0.5, 0, 0.7));
+    for (const x of [1.48, 1.6, 1.72]) {
+        for (const s of [1, -1]) g.add(at(blob(BLACK, 0.04, 0.04, 0.03), x, 0.72, 0.08 * s));
+    }
+    return { group: g, tail, fins, lids, top: 1.0 };
+}
+
+/**
+ * The do session: a very round goldfish with gold fins, a gold double tail as big as its body
+ * and a sky-blue bow on its head.
+ */
+function buildFantail(color: string) {
+    const g = new Group();
+    const lids: Mesh[] = [];
+    g.add(blob(toon(color), 1.0, 1.0, 0.85));
+    g.add(at(blob(toon(mix(color, '#ffffff', 0.55)), 0.78, 0.55, 0.72), 0.12, -0.36, 0));
+    const tail = new Group();
+    tail.position.x = -0.85;
+    for (const s of [1, -1]) {
+        const lobe = at(blob(FANTAIL_GOLD, 0.95, 0.42, 0.06), -0.7, 0.36 * s, 0);
+        lobe.rotation.z = 0.6 * s;
+        tail.add(lobe);
+    }
+    g.add(tail);
+    g.add(cone(CONE4, FANTAIL_GOLD, 0.45, 0.8, 0.1, -0.2, 1.0, 0, 0.6));
+    const fins: Group[] = [];
+    for (const s of [1, -1]) {
+        const f = new Group();
+        f.position.set(0.2, -0.35, 0.68 * s);
+        f.add(at(blob(FANTAIL_GOLD, 0.32, 0.11, 0.2), -0.15, 0, 0.08 * s));
+        g.add(f);
+        fins.push(f);
+    }
+    eyes(g, 0.62, 0.22, 0.5, 0.28, color, lids);
+    for (const s of [1, -1]) g.add(at(blob(PINK, 0.15, 0.08, 0.03), 0.56, -0.12, 0.7 * s));
+    g.add(at(blob(BLACK, 0.05, 0.035, 0.12), 1.0, -0.1, 0));
+    // A sky-blue bow on top of the head: two loops and a knot.
+    const bow = new Group();
+    bow.position.set(0.35, 0.98, 0);
+    bow.rotation.z = -0.25;
+    for (const s of [1, -1]) {
+        const loop = at(blob(BOW_BLUE, 0.26, 0.17, 0.09), 0.22 * s, 0.02, 0);
+        loop.rotation.z = -0.35 * s;
+        bow.add(loop);
+    }
+    bow.add(blob(BOW_BLUE, 0.09, 0.09, 0.1));
+    g.add(bow);
+    return { group: g, tail, fins, lids, top: 1.35 };
+}
+
 function buildFor(role: SessionRole, colorHex: string) {
     switch (role) {
         case 'day':
             return buildTurtle(colorHex);
+        case 'comms':
+            return buildClownfish(colorHex);
+        case 'do':
+            return buildFantail(colorHex);
         case 'conductor':
             return buildPuffer(colorHex);
         case 'rail':

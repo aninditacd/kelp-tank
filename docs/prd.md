@@ -18,14 +18,16 @@ It is a hobby build, with no deadline and no Linear tickets.
 - Each workspace with at least one live Claude or Codex session gets its own rock ledge with kelp.
 - Ledges zig-zag up the tank. With more workspaces, the ledges share the height down to a minimum (112 px each at normal zoom). Past that, the tank grows taller and Dita scrolls it, so no workspace is cut off and no fish shrinks.
 - A workspace with no live session gets no ledge.
-- Each workspace's ledge shows its name. Its kelp and fish take the workspace's own Kelpi colour.
+- Each workspace's ledge shows its name. Its kelp and fish take the workspace's own Kelpi colour. The comms clownfish and the do fantail keep their own fin colours (Dita, 16 Nov 2026), so they stay distinct from the turtle beside them.
 - Plain terminal panes are not fish. Workspace groups, such as Operations, do not appear.
 
 **The creatures** come from the session's name, because Kelpi does not record who started a pane.
 
 | Session | How the tank recognises it | Creature |
 | --- | --- | --- |
-| Daily session | A day name such as `wed-14-10-2026`, alone or after `comms-` or `do-` (added 16 Nov 2026, see `docs/daily-flow-layout.md`) | Turtle |
+| Daily session | A day name such as `wed-14-10-2026` | Turtle |
+| Comms session | `comms-` and a day name, such as `comms-wed-14-10-2026` (Dita, 16 Nov 2026; see `docs/daily-flow-layout.md`) | Slim clownfish with three black-edged white bands, white fins and a speech bubble |
+| Do session | `do-` and a day name, such as `do-wed-14-10-2026` (Dita, 16 Nov 2026) | Round fantail goldfish with gold fins, a big gold double tail and a sky-blue bow |
 | Conductor | A name containing `conduct` | Round pufferfish with a tiny crown |
 | A conductor's rail | A name ending in `rail-a`, `rail-b` and so on, with or without a batch prefix such as `lh-deps-1013-`. A handover number such as `rail-r2` still counts, and so does a relaunch suffix such as `rail-c1-2` (issue #28) | Very small fish that follow their conductor |
 | Brainstorming | The whole word `brainstorming`, such as `brainstorming-lantern` | Round fish in a starry wizard cap |
@@ -81,7 +83,7 @@ All creatures are cute, with big eyes and pink cheeks. A busy ledge is shared, n
 - A pinch or Cmd-scroll zooms in and out around the pointer, up to three times closer. The +, - and fit buttons in the bottom corner do the same, and fit returns to the tank's full width, scrolled to the top. A plain scroll moves through a tall tank and never zooms.
 - The menu button in the top corner lists every workspace with a live session, each with a show/hide toggle. A hidden workspace's ledge and fish leave the tank, and stay hidden after a restart.
 - When a session in a hidden workspace wants Dita, the menu button shows a glowing dot. A relaying rail or a muted workspace never lights it, as they never glow.
-- The menu's **Session names** section holds the patterns for the daily turtle, the conductor and the rail (issue #3). Each is a regular expression matched without regard to case, and an empty one turns that role off. The defaults are the rules in the table above. Save refuses an invalid pattern and names it. It also refuses a pattern whose repeated group repeats inside, as in `(a+)+`, because that shape can freeze the tank; this catches the common shape, not every slow pattern. Only a name's first 200 characters are matched. The patterns live in Kelpi plugin storage (`rolePatterns`), so they survive a restart. Dita chose name patterns only on 4 Nov 2026: not which creature each role gets, and not motion settings. Kelpi has no per-plugin settings page, so the controls sit in the tank's menu.
+- The menu's **Session names** section holds the patterns for the daily turtle, the comms clownfish, the do fantail, the conductor and the rail (issue #3). Each is a regular expression matched without regard to case, and an empty one turns that role off. The defaults are the rules in the table above. Save refuses an invalid pattern and names it. It also refuses a pattern whose repeated group repeats inside, as in `(a+)+`, because that shape can freeze the tank; this catches the common shape, not every slow pattern. Only a name's first 200 characters are matched. The patterns live in Kelpi plugin storage (`rolePatterns`), so they survive a restart. Dita chose name patterns only on 4 Nov 2026: not which creature each role gets, and not motion settings. Kelpi has no per-plugin settings page, so the controls sit in the tank's menu.
 
 ## Not in version one
 
