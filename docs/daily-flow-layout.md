@@ -1,6 +1,6 @@
 # The daily-flow layout
 
-Since 16 Nov 2026, the date-named log session is a turtle, `comms-<date>` is a clownfish with a speech bubble, and `do-<date>` is a fantail goldfish with a green tick. Dita asked for one creature each, all fish-shaped apart from the turtle. Think sessions need no change: their workspace gets its own ledge, and their work words pick their creatures.
+Since 16 Nov 2026, the date-named log session is a turtle, `comms-<date>` is a slim clownfish with black-edged white bands, white fins and a speech bubble, and `do-<date>` is a round fantail goldfish with gold fins, a big gold double tail and a sky-blue bow. Dita asked for one creature each, all fish-shaped apart from the turtle, and picked these from a visual preview so they differ at sidebar size. Think sessions need no change: their workspace gets its own ledge, and their work words pick their creatures.
 
 ## The layout
 
@@ -20,7 +20,7 @@ The daily-flow plugin runs three daily sessions in one desk workspace, and topic
 ## How the tank treats workspaces
 
 - Each workspace with a live Claude session gets one ledge, in Kelpi's sidebar order (`decideTank`). Every session in it shares that ledge, so the turtle, the clownfish and the fantail sit on the desk ledge, and the Think workspace is its own group.
-- Fish take their workspace's Kelpi colour. Nothing here changes a colour.
+- Fish take their workspace's Kelpi colour. The clownfish's white fins and the fantail's gold fins and blue bow are their own accents, so the three daily creatures differ although they share a colour. Nothing here changes a workspace's colour.
 - The tank follows Kelpi's sidebar groups for order and shortcuts, and never draws a group. The auto-sort moves only top-level workspaces (`src/auto-sort.ts`).
 - The `Awaiting you: <n>` footer works per pane (`src/quiet.ts`), so each daily session is a quiet update or a glowing "wants you" fish on its own.
 

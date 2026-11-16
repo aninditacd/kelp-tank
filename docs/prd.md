@@ -18,7 +18,7 @@ It is a hobby build, with no deadline and no Linear tickets.
 - Each workspace with at least one live Claude or Codex session gets its own rock ledge with kelp.
 - Ledges zig-zag up the tank. With more workspaces, the ledges share the height down to a minimum (112 px each at normal zoom). Past that, the tank grows taller and Dita scrolls it, so no workspace is cut off and no fish shrinks.
 - A workspace with no live session gets no ledge.
-- Each workspace's ledge shows its name. Its kelp and fish take the workspace's own Kelpi colour.
+- Each workspace's ledge shows its name. Its kelp and fish take the workspace's own Kelpi colour. The comms clownfish and the do fantail keep their own fin colours (Dita, 16 Nov 2026), so they stay distinct from the turtle beside them.
 - Plain terminal panes are not fish. Workspace groups, such as Operations, do not appear.
 
 **The creatures** come from the session's name, because Kelpi does not record who started a pane.
@@ -26,8 +26,8 @@ It is a hobby build, with no deadline and no Linear tickets.
 | Session | How the tank recognises it | Creature |
 | --- | --- | --- |
 | Daily session | A day name such as `wed-14-10-2026` | Turtle |
-| Comms session | `comms-` and a day name, such as `comms-wed-14-10-2026` (Dita, 16 Nov 2026; see `docs/daily-flow-layout.md`) | Clownfish with white bands and a speech bubble |
-| Do session | `do-` and a day name, such as `do-wed-14-10-2026` (Dita, 16 Nov 2026) | Fantail goldfish with a double tail and a green tick |
+| Comms session | `comms-` and a day name, such as `comms-wed-14-10-2026` (Dita, 16 Nov 2026; see `docs/daily-flow-layout.md`) | Slim clownfish with three black-edged white bands, white fins and a speech bubble |
+| Do session | `do-` and a day name, such as `do-wed-14-10-2026` (Dita, 16 Nov 2026) | Round fantail goldfish with gold fins, a big gold double tail and a sky-blue bow |
 | Conductor | A name containing `conduct` | Round pufferfish with a tiny crown |
 | A conductor's rail | A name ending in `rail-a`, `rail-b` and so on, with or without a batch prefix such as `lh-deps-1013-`. A handover number such as `rail-r2` still counts, and so does a relaunch suffix such as `rail-c1-2` (issue #28) | Very small fish that follow their conductor |
 | Brainstorming | The whole word `brainstorming`, such as `brainstorming-lantern` | Round fish in a starry wizard cap |
