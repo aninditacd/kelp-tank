@@ -25,7 +25,7 @@ It is a hobby build, with no deadline and no Linear tickets.
 
 | Session | How the tank recognises it | Creature |
 | --- | --- | --- |
-| Daily session | A day name such as `wed-14-10-2026` | Turtle |
+| Daily session | A day name such as `wed-14-10-2026`, alone or after `comms-` or `do-` (added 16 Nov 2026, see `docs/daily-flow-layout.md`) | Turtle |
 | Conductor | A name containing `conduct` | Round pufferfish with a tiny crown |
 | A conductor's rail | A name ending in `rail-a`, `rail-b` and so on, with or without a batch prefix such as `lh-deps-1013-`. A handover number such as `rail-r2` still counts, and so does a relaunch suffix such as `rail-c1-2` (issue #28) | Very small fish that follow their conductor |
 | Brainstorming | The whole word `brainstorming`, such as `brainstorming-lantern` | Round fish in a starry wizard cap |
