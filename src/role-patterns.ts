@@ -1,5 +1,6 @@
 /**
- * The session-name patterns that pick the daily-planner turtle, a conductor and a rail (issue #3).
+ * The session-name patterns that pick the daily-planner turtle, the comms clownfish, the do
+ * fantail, a conductor and a rail (issue #3).
  * People set them in the tank's corner menu, and the tank keeps them in Kelpi plugin storage, so a
  * different naming habit needs no build from source. Pure: no DOM, no Kelpi.
  *
@@ -11,23 +12,25 @@
 /** The plugin storage key holding the patterns. */
 export const PATTERNS_KEY = 'rolePatterns';
 
-export type PatternRole = 'day' | 'conductor' | 'rail';
+export type PatternRole = 'day' | 'comms' | 'do' | 'conductor' | 'rail';
 export type RolePatterns = Record<PatternRole, string>;
 /** A compiled pattern per role, or null when the role is turned off. */
 export type RoleMatchers = Record<PatternRole, RegExp | null>;
 
-const ROLES: readonly PatternRole[] = ['day', 'conductor', 'rail'];
+const ROLES: readonly PatternRole[] = ['day', 'comms', 'do', 'conductor', 'rail'];
 
 /**
- * The built-in rules. A day is a date name such as `wed-14-10-2026`, alone or after `comms-` or
- * `do-` (`comms-wed-14-10-2026`), the daily-flow plugin's three daily sessions
+ * The built-in rules. A day is a date name such as `wed-14-10-2026`. The daily-flow plugin's other
+ * two daily sessions are that date after `comms-` or `do-`, such as `comms-wed-14-10-2026`
  * (docs/daily-flow-layout.md). A conductor's name contains
  * `conduct`. A rail is `rail-a`, a batch-prefixed `lh-deps-1013-rail-a`, a handover such as
  * `rail-r2`, or a relaunch such as `rail-c1-2` (issue #28); never `guardrail-a`, `rail-ab` or
  * `rail-2`.
  */
 export const DEFAULT_PATTERNS: RolePatterns = {
-    day: '^(?:comms-|do-)?(mon|tue|wed|thu|fri|sat|sun)-\\d{2}-\\d{2}-\\d{4}$',
+    day: '^(mon|tue|wed|thu|fri|sat|sun)-\\d{2}-\\d{2}-\\d{4}$',
+    comms: '^comms-(mon|tue|wed|thu|fri|sat|sun)-\\d{2}-\\d{2}-\\d{4}$',
+    do: '^do-(mon|tue|wed|thu|fri|sat|sun)-\\d{2}-\\d{2}-\\d{4}$',
     conductor: 'conduct',
     rail: '(?:^|-)rail-[a-z]\\d*(?:-\\d+)?$',
 };
@@ -116,6 +119,8 @@ export function readPatterns(saved: unknown): RolePatterns {
 
 const ROLE_NAMES: Record<PatternRole, string> = {
     day: 'Daily session',
+    comms: 'Comms session',
+    do: 'Do session',
     conductor: 'Conductor',
     rail: 'Rail',
 };

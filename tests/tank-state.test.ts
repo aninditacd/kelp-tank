@@ -15,6 +15,8 @@ describe('TankState', () => {
     it('the tank state carries the agreed workspace and session fields', () => {
         expectTypeOf<SessionRole>().toEqualTypeOf<
             | 'day'
+            | 'comms'
+            | 'do'
             | 'conductor'
             | 'rail'
             | 'fish'

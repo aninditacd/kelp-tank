@@ -35,6 +35,8 @@ export interface TankWorkspace {
  */
 export type SessionRole =
     | 'day'
+    | 'comms'
+    | 'do'
     | 'conductor'
     | 'rail'
     | 'fish'

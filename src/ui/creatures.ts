@@ -29,6 +29,8 @@ const HEMI = new SphereGeometry(1, 20, 10, 0, Math.PI * 2, 0, Math.PI / 2);
 /** How big each creature is, and how far its nose reaches ahead of its centre (in its own units). */
 export const SIZE: Record<SessionRole, number> = {
     day: 0.16,
+    comms: 0.12,
+    do: 0.12,
     conductor: 0.17,
     rail: 0.055,
     fish: 0.12,
@@ -39,6 +41,8 @@ export const SIZE: Record<SessionRole, number> = {
 };
 export const NOSE: Record<SessionRole, number> = {
     day: 1.75,
+    comms: 1.2,
+    do: 1.15,
     conductor: 1.05,
     rail: 1.2,
     fish: 1.2,
@@ -429,10 +433,73 @@ function buildSpectacled(color: string) {
     return { group: g, tail, fins, lids, top: 0.75 };
 }
 
+const TICK = new BoxGeometry(1, 1, 1);
+const TICK_GREEN = new MeshBasicMaterial({ color: 0x2fbf71 });
+
+/** The comms session: a clownfish with two white bands and a speech bubble with three dots. */
+function buildClownfish(color: string) {
+    const parts = buildFish(color);
+    const band = toon('#ffffff');
+    // Each band is a thin slice a touch wider than the body where it sits, so it shows as a ring.
+    parts.group.add(at(blob(band, 0.11, 0.99, 0.86), 0.38, 0, 0));
+    parts.group.add(at(blob(band, 0.11, 0.95, 0.82), -0.5, 0, 0));
+    parts.group.add(at(blob(WHITE, 0.34, 0.24, 0.1), 1.0, 1.2, 0));
+    parts.group.add(cone(CONE4, WHITE, 0.09, 0.2, 0.06, 0.82, 0.98, 0, 0.7));
+    for (const x of [0.88, 1.0, 1.12]) {
+        for (const s of [1, -1])
+            parts.group.add(at(blob(BLACK, 0.04, 0.04, 0.03), x, 1.2, 0.08 * s));
+    }
+    return { ...parts, top: 1.5 };
+}
+
+/** The do session: a round goldfish with a big flowing double tail and a green tick above it. */
+function buildFantail(color: string) {
+    const g = new Group();
+    const lids: Mesh[] = [];
+    const body = toon(color);
+    const belly = toon(mix(color, '#ffffff', 0.55));
+    const fin = toon(mix(color, '#ffffff', 0.4));
+    g.add(blob(body, 1.05, 0.95, 0.8));
+    g.add(at(blob(belly, 0.8, 0.55, 0.68), 0.12, -0.3, 0));
+    const tail = new Group();
+    tail.position.x = -0.9;
+    for (const s of [1, -1]) {
+        const lobe = at(blob(fin, 0.62, 0.3, 0.06), -0.45, 0.22 * s, 0);
+        lobe.rotation.z = 0.55 * s;
+        tail.add(lobe);
+    }
+    g.add(tail);
+    g.add(cone(CONE4, fin, 0.4, 0.75, 0.1, -0.2, 0.95, 0, 0.6));
+    const fins: Group[] = [];
+    for (const s of [1, -1]) {
+        const f = new Group();
+        f.position.set(0.2, -0.3, 0.64 * s);
+        f.add(at(blob(fin, 0.3, 0.1, 0.18), -0.14, 0, 0.08 * s));
+        g.add(f);
+        fins.push(f);
+    }
+    eyes(g, 0.64, 0.2, 0.46, 0.28, color, lids);
+    for (const s of [1, -1]) g.add(at(blob(PINK, 0.15, 0.08, 0.03), 0.55, -0.12, 0.66 * s));
+    g.add(at(blob(BLACK, 0.05, 0.035, 0.12), 1.04, -0.1, 0));
+    // The tick: a short arm up to the left and a long arm up to the right, from one corner.
+    const short = at(new Mesh(TICK, TICK_GREEN), -0.02, 1.42, 0);
+    short.scale.set(0.13, 0.34, 0.08);
+    short.rotation.z = 0.785;
+    const long = at(new Mesh(TICK, TICK_GREEN), 0.27, 1.55, 0);
+    long.scale.set(0.13, 0.62, 0.08);
+    long.rotation.z = -0.6;
+    g.add(short, long);
+    return { group: g, tail, fins, lids, top: 1.9 };
+}
+
 function buildFor(role: SessionRole, colorHex: string) {
     switch (role) {
         case 'day':
             return buildTurtle(colorHex);
+        case 'comms':
+            return buildClownfish(colorHex);
+        case 'do':
+            return buildFantail(colorHex);
         case 'conductor':
             return buildPuffer(colorHex);
         case 'rail':

@@ -30,6 +30,8 @@ export function roleForName(name: string, roles: RoleMatchers = DEFAULT_MATCHERS
     // A bound on the text bounds the time any pattern can take on it.
     const head = name.slice(0, MAX_NAME_LENGTH);
     if (roles.day?.test(head)) return 'day';
+    if (roles.comms?.test(head)) return 'comms';
+    if (roles.do?.test(head)) return 'do';
     // Rails first, so a batch slug containing "conduct" still makes a rail.
     if (roles.rail?.test(head)) return 'rail';
     if (roles.conductor?.test(head)) return 'conductor';

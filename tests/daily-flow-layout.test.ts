@@ -49,13 +49,13 @@ const world: KelpiWorld = {
 };
 
 describe('the daily-flow layout', () => {
-    it('the log, comms and do sessions are all daily turtles', () => {
+    it('the log session is a turtle, comms a clownfish and do a fantail', () => {
         expect(roleForName('mon-16-11-2026')).toBe('day');
-        expect(roleForName('comms-mon-16-11-2026')).toBe('day');
-        expect(roleForName('do-mon-16-11-2026')).toBe('day');
+        expect(roleForName('comms-mon-16-11-2026')).toBe('comms');
+        expect(roleForName('do-mon-16-11-2026')).toBe('do');
     });
 
-    it('a comms or do prefix without a date, or another prefix, is not a daily session', () => {
+    it('a comms or do prefix without a date, or another prefix, is a plain fish', () => {
         expect(roleForName('comms-notes')).toBe('fish');
         expect(roleForName('do-list')).toBe('fish');
         expect(roleForName('todo-mon-16-11-2026')).toBe('fish');
@@ -64,13 +64,13 @@ describe('the daily-flow layout', () => {
         expect(roleForName('comms-do-mon-16-11-2026')).toBe('fish');
     });
 
-    it('three daily sessions share one ledge, each its own creature', () => {
+    it('the three daily sessions share one ledge as three different creatures', () => {
         const tank = decideTank(world, null);
         const desk = tank.sessions.filter((s) => s.workspaceId === 'desk');
         expect(desk.map((s) => [s.paneId, s.role])).toEqual([
             ['log', 'day'],
-            ['comms', 'day'],
-            ['do', 'day'],
+            ['comms', 'comms'],
+            ['do', 'do'],
         ]);
         expect(tank.workspaces.filter((w) => w.id === 'desk')).toHaveLength(1);
     });
@@ -82,11 +82,12 @@ describe('the daily-flow layout', () => {
         expect(think.map((s) => s.role)).toEqual(['brainstorming', 'researching', 'reviewing']);
     });
 
-    it('a daily session whose reply ends Awaiting you: 0 is a quiet update', () => {
+    it('a comms session in the quiet set is an update, and a do session outside it wants you', () => {
         expect(awaitingCount('Done.\n\nAwaiting you: 0 - nothing')).toBe(0);
         expect(awaitingCount('Pick one.\n\nAwaiting you: 1 - a pick')).toBe(1);
         const tank = decideTank(world, null, undefined, new Set(['comms']));
         const state = (id: string) => tank.sessions.find((s) => s.paneId === id)?.state;
+        expect(tank.sessions.find((s) => s.paneId === 'comms')?.role).toBe('comms');
         expect(state('comms')).toBe('update');
         expect(state('do')).toBe('wantsYou');
     });
